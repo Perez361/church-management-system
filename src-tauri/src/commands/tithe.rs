@@ -1,6 +1,6 @@
 use crate::db::get_pool;
 use crate::models::*;
-use crate::commands::members::queue_sync;
+use crate::commands::members::{queue_sync, queue_sync_payload};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -24,14 +24,18 @@ pub async fn get_tithe_payments(
         .await?
     } else if let Some(mid) = member_id {
         sqlx::query_as::<_, TithePayment>(
-            "SELECT * FROM tithe_payments WHERE member_id = ? ORDER BY payment_date DESC",
+            "SELECT * FROM tithe_payments
+             WHERE member_id = ?
+             ORDER BY payment_date DESC",
         )
         .bind(&mid)
         .fetch_all(pool)
         .await?
     } else {
         sqlx::query_as::<_, TithePayment>(
-            "SELECT * FROM tithe_payments ORDER BY payment_date DESC LIMIT 100",
+            "SELECT * FROM tithe_payments
+             ORDER BY payment_date DESC
+             LIMIT 100",
         )
         .fetch_all(pool)
         .await?
@@ -43,8 +47,8 @@ pub async fn get_tithe_payments(
 #[tauri::command]
 pub async fn create_tithe_payment(input: CreateTitheInput) -> Result<TithePayment, AppError> {
     let pool = get_pool();
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let id   = Uuid::new_v4().to_string();
+    let now  = Utc::now().to_rfc3339();
 
     sqlx::query(
         "INSERT INTO tithe_payments
@@ -66,14 +70,18 @@ pub async fn create_tithe_payment(input: CreateTitheInput) -> Result<TithePaymen
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "tithe_payments", &id, "insert").await;
-
+    // Fetch the full inserted row so we have the complete payload for sync
     let row = sqlx::query_as::<_, TithePayment>(
         "SELECT * FROM tithe_payments WHERE id = ?",
     )
     .bind(&id)
     .fetch_one(pool)
     .await?;
+
+    // Queue the full row as the sync payload
+    let payload = serde_json::to_value(&row)
+        .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
+    queue_sync_payload(pool, "tithe_payments", &id, "insert", payload).await;
 
     Ok(row)
 }
@@ -84,15 +92,15 @@ pub async fn get_tithe_summary(year: i64) -> Result<Vec<serde_json::Value>, AppE
 
     #[derive(sqlx::FromRow)]
     struct Row {
-        month: i64,
-        total: f64,
+        month:  i64,
+        total:  f64,
         payers: i64,
     }
 
     let rows = sqlx::query_as::<_, Row>(
-        "SELECT period_month as month,
-                COALESCE(SUM(amount), 0.0) as total,
-                COUNT(DISTINCT member_id) as payers
+        "SELECT period_month AS month,
+                COALESCE(SUM(amount), 0.0) AS total,
+                COUNT(DISTINCT member_id) AS payers
          FROM tithe_payments
          WHERE period_year = ?
          GROUP BY period_month
@@ -105,9 +113,9 @@ pub async fn get_tithe_summary(year: i64) -> Result<Vec<serde_json::Value>, AppE
     let result = rows
         .iter()
         .map(|r| serde_json::json!({
-            "month": r.month,
-            "total": r.total,
-            "payers": r.payers
+            "month":  r.month,
+            "total":  r.total,
+            "payers": r.payers,
         }))
         .collect();
 

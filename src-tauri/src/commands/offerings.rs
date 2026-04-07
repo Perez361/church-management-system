@@ -1,6 +1,6 @@
 use crate::db::get_pool;
 use crate::models::*;
-use crate::commands::members::queue_sync;
+use crate::commands::members::{queue_sync, queue_sync_payload};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -25,7 +25,9 @@ pub async fn get_offerings(
         }
         _ => {
             sqlx::query_as::<_, Offering>(
-                "SELECT * FROM offerings ORDER BY service_date DESC LIMIT 100",
+                "SELECT * FROM offerings
+                 ORDER BY service_date DESC
+                 LIMIT 100",
             )
             .fetch_all(pool)
             .await?
@@ -37,9 +39,9 @@ pub async fn get_offerings(
 
 #[tauri::command]
 pub async fn create_offering(input: CreateOfferingInput) -> Result<Offering, AppError> {
-    let pool = get_pool();
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let pool     = get_pool();
+    let id       = Uuid::new_v4().to_string();
+    let now      = Utc::now().to_rfc3339();
     let currency = input.currency.unwrap_or_else(|| "GHS".into());
 
     sqlx::query(
@@ -60,8 +62,7 @@ pub async fn create_offering(input: CreateOfferingInput) -> Result<Offering, App
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "offerings", &id, "insert").await;
-
+    // Fetch the full inserted row so we have the complete payload for sync
     let row = sqlx::query_as::<_, Offering>(
         "SELECT * FROM offerings WHERE id = ?",
     )
@@ -69,25 +70,38 @@ pub async fn create_offering(input: CreateOfferingInput) -> Result<Offering, App
     .fetch_one(pool)
     .await?;
 
+    // Queue the full row as the sync payload
+    let payload = serde_json::to_value(&row)
+        .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
+    queue_sync_payload(pool, "offerings", &id, "insert", payload).await;
+
     Ok(row)
 }
 
 #[tauri::command]
 pub async fn get_offerings_summary(year: i64) -> Result<serde_json::Value, AppError> {
-    let pool = get_pool();
+    let pool     = get_pool();
     let year_str = year.to_string();
 
     #[derive(sqlx::FromRow)]
-    struct MonthRow { month: String, total: f64 }
+    struct MonthRow {
+        month: String,
+        total: f64,
+    }
+
     #[derive(sqlx::FromRow)]
-    struct CatRow { category: String, total: f64 }
+    struct CatRow {
+        category: String,
+        total:    f64,
+    }
 
     let monthly = sqlx::query_as::<_, MonthRow>(
-        "SELECT strftime('%m', service_date) as month,
-                COALESCE(SUM(total_amount), 0.0) as total
+        "SELECT strftime('%m', service_date) AS month,
+                COALESCE(SUM(total_amount), 0.0) AS total
          FROM offerings
          WHERE strftime('%Y', service_date) = ?
-         GROUP BY month ORDER BY month",
+         GROUP BY month
+         ORDER BY month",
     )
     .bind(&year_str)
     .fetch_all(pool)
@@ -95,10 +109,11 @@ pub async fn get_offerings_summary(year: i64) -> Result<serde_json::Value, AppEr
 
     let by_category = sqlx::query_as::<_, CatRow>(
         "SELECT category,
-                COALESCE(SUM(total_amount), 0.0) as total
+                COALESCE(SUM(total_amount), 0.0) AS total
          FROM offerings
          WHERE strftime('%Y', service_date) = ?
-         GROUP BY category ORDER BY total DESC",
+         GROUP BY category
+         ORDER BY total DESC",
     )
     .bind(&year_str)
     .fetch_all(pool)
@@ -107,11 +122,11 @@ pub async fn get_offerings_summary(year: i64) -> Result<serde_json::Value, AppEr
     Ok(serde_json::json!({
         "monthly": monthly.iter().map(|r| serde_json::json!({
             "month": r.month.parse::<i64>().unwrap_or(0),
-            "total": r.total
+            "total": r.total,
         })).collect::<Vec<_>>(),
         "by_category": by_category.iter().map(|r| serde_json::json!({
             "category": r.category,
-            "total": r.total
-        })).collect::<Vec<_>>()
+            "total":    r.total,
+        })).collect::<Vec<_>>(),
     }))
 }

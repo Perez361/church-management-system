@@ -1,53 +1,70 @@
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  Member, TithePayment, Offering,
-  WelfareContribution
-} from "@/types";
 
-// ── Members ──────────────────────────────────────────────────────────────────
-export const tauriGetMembers = (search?: string, status?: string) =>
-  invoke<Member[]>("get_members", { search, status });
+// ── Types mirrored from Rust models ────────────────────────────────────────
 
-export const tauriGetMember = (id: string) =>
-  invoke<Member>("get_member", { id });
+export interface MemberSummary {
+  id: string;
+  member_no: string;
+  first_name: string;
+  last_name: string;
+  gender: string;
+  phone?: string;
+  email?: string;
+  department_id?: string;
+  membership_date: string;
+  status: string;
+}
 
-export const tauriCreateMember = (input: Omit<Member, "id" | "member_no" | "created_at" | "updated_at" | "deleted_at" | "synced_at">) =>
-  invoke<Member>("create_member", { input });
+export interface Member extends MemberSummary {
+  date_of_birth?: string;
+  address?: string;
+  photo_url?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  synced_at?: string;
+}
 
-export const tauriUpdateMember = (id: string, input: Partial<Member>) =>
-  invoke<Member>("update_member", { id, input });
+export interface TithePayment {
+  id: string;
+  member_id: string;
+  amount: number;
+  payment_date: string;
+  period_month: number;
+  period_year: number;
+  payment_mode: string;
+  reference_no?: string;
+  received_by: string;
+  notes?: string;
+  created_at: string;
+  synced_at?: string;
+}
 
-export const tauriDeleteMember = (id: string) =>
-  invoke<boolean>("delete_member", { id });
+export interface Offering {
+  id: string;
+  service_date: string;
+  service_type: string;
+  category: string;
+  total_amount: number;
+  currency: string;
+  notes?: string;
+  counted_by?: string;
+  created_at: string;
+  synced_at?: string;
+}
 
-// ── Tithe ─────────────────────────────────────────────────────────────────────
-export const tauriGetTithePayments = (month?: number, year?: number, memberId?: string) =>
-  invoke<TithePayment[]>("get_tithe_payments", { month, year, memberId });
+export interface WelfareContribution {
+  id: string;
+  member_id: string;
+  amount: number;
+  contribution_date: string;
+  payment_mode: string;
+  reference_no?: string;
+  received_by: string;
+  created_at: string;
+  synced_at?: string;
+}
 
-export const tauriCreateTithePayment = (input: Omit<TithePayment, "id" | "created_at" | "synced_at">) =>
-  invoke<TithePayment>("create_tithe_payment", { input });
-
-export const tauriGetTitheSummary = (year: number) =>
-  invoke<{ month: number; total: number; payers: number }[]>("get_tithe_summary", { year });
-
-// ── Offerings ─────────────────────────────────────────────────────────────────
-export const tauriGetOfferings = (fromDate?: string, toDate?: string) =>
-  invoke<Offering[]>("get_offerings", { fromDate, toDate });
-
-export const tauriCreateOffering = (input: Omit<Offering, "id" | "created_at" | "synced_at">) =>
-  invoke<Offering>("create_offering", { input });
-
-// ── Welfare ───────────────────────────────────────────────────────────────────
-export const tauriGetWelfareContributions = (memberId?: string) =>
-  invoke<WelfareContribution[]>("get_welfare_contributions", { memberId });
-
-export const tauriCreateWelfareContribution = (input: Omit<WelfareContribution, "id" | "created_at" | "synced_at">) =>
-  invoke<WelfareContribution>("create_welfare_contribution", { input });
-
-export const tauriGetWelfareBalance = () =>
-  invoke<number>("get_welfare_balance");
-
-// ── Dashboard ─────────────────────────────────────────────────────────────────
 export interface DashboardStats {
   total_members: number;
   active_members: number;
@@ -59,8 +76,128 @@ export interface DashboardStats {
   welfare_contributors_month: number;
 }
 
+// ── Member commands ─────────────────────────────────────────────────────────
+
+export const tauriGetMembers = (search?: string, status?: string) =>
+  invoke<MemberSummary[]>("get_members", { search, status });
+
+export const tauriGetMember = (id: string) =>
+  invoke<Member>("get_member", { id });
+
+export interface CreateMemberInput {
+  first_name: string;
+  last_name: string;
+  gender: string;
+  date_of_birth?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  department_id?: string;
+  membership_date: string;
+  status?: string;
+}
+
+export const tauriCreateMember = (input: CreateMemberInput) =>
+  invoke<Member>("create_member", { input });
+
+export const tauriUpdateMember = (id: string, input: Partial<CreateMemberInput>) =>
+  invoke<Member>("update_member", { id, input });
+
+export const tauriDeleteMember = (id: string) =>
+  invoke<boolean>("delete_member", { id });
+
+// ── Tithe commands ──────────────────────────────────────────────────────────
+
+export interface CreateTitheInput {
+  member_id: string;
+  amount: number;
+  payment_date: string;
+  period_month: number;
+  period_year: number;
+  payment_mode: string;
+  reference_no?: string;
+  received_by: string;
+  notes?: string;
+}
+
+export const tauriGetTithePayments = (month?: number, year?: number, memberId?: string) =>
+  invoke<TithePayment[]>("get_tithe_payments", { month, year, memberId });
+
+export const tauriCreateTithePayment = (input: CreateTitheInput) =>
+  invoke<TithePayment>("create_tithe_payment", { input });
+
+export const tauriGetTitheSummary = (year: number) =>
+  invoke<{ month: number; total: number; payers: number }[]>("get_tithe_summary", { year });
+
+// ── Offering commands ───────────────────────────────────────────────────────
+
+export interface CreateOfferingInput {
+  service_date: string;
+  service_type: string;
+  category: string;
+  total_amount: number;
+  currency?: string;
+  notes?: string;
+  counted_by?: string;
+}
+
+export const tauriGetOfferings = (fromDate?: string, toDate?: string) =>
+  invoke<Offering[]>("get_offerings", { fromDate, toDate });
+
+export const tauriCreateOffering = (input: CreateOfferingInput) =>
+  invoke<Offering>("create_offering", { input });
+
+// ── Welfare commands ────────────────────────────────────────────────────────
+
+export interface CreateWelfareInput {
+  member_id: string;
+  amount: number;
+  contribution_date: string;
+  payment_mode: string;
+  reference_no?: string;
+  received_by: string;
+}
+
+export const tauriGetWelfareContributions = (memberId?: string) =>
+  invoke<WelfareContribution[]>("get_welfare_contributions", { memberId });
+
+export const tauriCreateWelfareContribution = (input: CreateWelfareInput) =>
+  invoke<WelfareContribution>("create_welfare_contribution", { input });
+
+export const tauriGetWelfareBalance = () =>
+  invoke<number>("get_welfare_balance");
+
+// ── Dashboard commands ──────────────────────────────────────────────────────
+
 export const tauriGetDashboardStats = () =>
   invoke<DashboardStats>("get_dashboard_stats");
 
 export const tauriGetSyncPendingCount = () =>
   invoke<number>("get_sync_pending_count");
+
+// ── Sync ─────────────────────────────────────────────────────────────────────
+
+export interface SyncStats {
+  pending: number;
+  synced: number;
+  failed: number;
+  configured: boolean;
+}
+
+export const tauriTriggerSync  = () => invoke<string>("trigger_sync");
+export const tauriGetSyncStats = () => invoke<SyncStats>("get_sync_stats");
+
+// ── Exports ───────────────────────────────────────────────────────────────────
+
+export const tauriExportMembersExcel   = ()             =>
+  invoke<string>("export_members_excel");
+
+export const tauriExportTitheExcel     = (year: number) =>
+  invoke<string>("export_tithe_excel", { year });
+
+export const tauriExportOfferingsExcel = (year: number) =>
+  invoke<string>("export_offerings_excel", { year });
+
+export const tauriExportWelfareExcel   = (year: number) =>
+  invoke<string>("export_welfare_excel", { year });
+

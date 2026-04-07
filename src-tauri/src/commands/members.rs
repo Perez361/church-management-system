@@ -4,10 +4,11 @@ use chrono::Utc;
 use uuid::Uuid;
 
 async fn next_member_no(pool: &sqlx::SqlitePool) -> String {
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM members WHERE deleted_at IS NULL")
-        .fetch_one(pool)
-        .await
-        .unwrap_or((0,));
+    let count: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM members WHERE deleted_at IS NULL")
+            .fetch_one(pool)
+            .await
+            .unwrap_or((0,));
     format!("CHR-{:03}", count.0 + 1)
 }
 
@@ -17,7 +18,7 @@ pub async fn get_members(
     status: Option<String>,
 ) -> Result<Vec<MemberSummary>, AppError> {
     let pool = get_pool();
-    let search_pat = format!("%{}%", search.unwrap_or_default().to_lowercase());
+    let search_pat   = format!("%{}%", search.unwrap_or_default().to_lowercase());
     let status_filter = status.unwrap_or_else(|| "%".to_string());
 
     let rows = sqlx::query_as::<_, MemberSummary>(
@@ -52,11 +53,11 @@ pub async fn get_member(id: String) -> Result<Member, AppError> {
 
 #[tauri::command]
 pub async fn create_member(input: CreateMemberInput) -> Result<Member, AppError> {
-    let pool = get_pool();
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let pool      = get_pool();
+    let id        = Uuid::new_v4().to_string();
+    let now       = Utc::now().to_rfc3339();
     let member_no = next_member_no(pool).await;
-    let status = input.status.unwrap_or_else(|| "active".into());
+    let status    = input.status.unwrap_or_else(|| "active".into());
 
     sqlx::query(
         "INSERT INTO members
@@ -82,14 +83,16 @@ pub async fn create_member(input: CreateMemberInput) -> Result<Member, AppError>
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "members", &id, "insert").await;
-    get_member(id).await
+    // Queue with full payload for sync
+    queue_member_sync(pool, &id, "insert").await;
+
+    get_member(id.to_owned()).await
 }
 
 #[tauri::command]
 pub async fn update_member(id: String, input: UpdateMemberInput) -> Result<Member, AppError> {
     let pool = get_pool();
-    let now = Utc::now().to_rfc3339();
+    let now  = Utc::now().to_rfc3339();
 
     sqlx::query(
         "UPDATE members SET
@@ -121,21 +124,29 @@ pub async fn update_member(id: String, input: UpdateMemberInput) -> Result<Membe
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "members", &id, "update").await;
-    get_member(id).await
+    // Queue with full updated payload for sync
+    queue_member_sync(pool, &id, "update").await;
+
+    get_member(id.to_owned()).await
 }
 
 #[tauri::command]
 pub async fn delete_member(id: String) -> Result<bool, AppError> {
     let pool = get_pool();
-    let now = Utc::now().to_rfc3339();
-    sqlx::query("UPDATE members SET deleted_at = ?, updated_at = ? WHERE id = ?")
-        .bind(&now)
-        .bind(&now)
-        .bind(&id)
-        .execute(pool)
-        .await?;
+    let now  = Utc::now().to_rfc3339();
+
+    sqlx::query(
+        "UPDATE members SET deleted_at = ?, updated_at = ? WHERE id = ?",
+    )
+    .bind(&now)
+    .bind(&now)
+    .bind(&id)
+    .execute(pool)
+    .await?;
+
+    // Delete only needs the ID — no need to fetch the full row
     queue_sync(pool, "members", &id, "delete").await;
+
     Ok(true)
 }
 
@@ -149,18 +160,69 @@ pub async fn get_member_count() -> Result<i64, AppError> {
     Ok(row.0)
 }
 
-pub async fn queue_sync(pool: &sqlx::SqlitePool, table: &str, record_id: &str, op: &str) {
-    let now = Utc::now().to_rfc3339();
-    let payload = serde_json::json!({ "id": record_id }).to_string();
+// ── Sync helpers ──────────────────────────────────────────────────────────────
+
+/// Minimal sync entry — just stores the record ID.
+/// Used for deletes where we only need the ID on the remote side.
+pub async fn queue_sync(
+    pool: &sqlx::SqlitePool,
+    table: &str,
+    record_id: &str,
+    op: &str,
+) {
+    queue_sync_payload(
+        pool,
+        table,
+        record_id,
+        op,
+        serde_json::json!({ "id": record_id }),
+    )
+    .await;
+}
+
+/// Full sync entry — stores the complete row as JSON payload.
+/// This is what the sync worker will POST/PATCH to Supabase.
+pub async fn queue_sync_payload(
+    pool: &sqlx::SqlitePool,
+    table: &str,
+    record_id: &str,
+    op: &str,
+    payload: serde_json::Value,
+) {
+    let now         = Utc::now().to_rfc3339();
+    let payload_str = payload.to_string();
+
     let _ = sqlx::query(
-        "INSERT INTO sync_queue (table_name, record_id, operation, payload, created_at)
-         VALUES (?,?,?,?,?)",
+        "INSERT INTO sync_queue
+         (table_name, record_id, operation, payload, status, retry_count, created_at)
+         VALUES (?,?,?,?,'pending',0,?)",
     )
     .bind(table)
     .bind(record_id)
     .bind(op)
-    .bind(&payload)
+    .bind(&payload_str)
     .bind(&now)
     .execute(pool)
     .await;
+}
+
+/// Fetches the full member row then queues it as a sync payload.
+/// Used for inserts and updates so Supabase receives the complete record.
+pub async fn queue_member_sync(pool: &sqlx::SqlitePool, id: &str, op: &str) {
+    let row = sqlx::query_as::<_, Member>(
+        "SELECT * FROM members WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    let payload = match row {
+        Some(m) => serde_json::to_value(&m)
+            .unwrap_or_else(|_| serde_json::json!({ "id": id })),
+        None => serde_json::json!({ "id": id }),
+    };
+
+    queue_sync_payload(pool, "members", id, op, payload).await;
 }

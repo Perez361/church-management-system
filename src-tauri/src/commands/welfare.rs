@@ -1,6 +1,6 @@
 use crate::db::get_pool;
 use crate::models::*;
-use crate::commands::members::queue_sync;
+use crate::commands::members::{queue_sync, queue_sync_payload};
 use chrono::Utc;
 use uuid::Uuid;
 
@@ -13,7 +13,8 @@ pub async fn get_welfare_contributions(
     let rows = if let Some(mid) = member_id {
         sqlx::query_as::<_, WelfareContribution>(
             "SELECT * FROM welfare_contributions
-             WHERE member_id = ? ORDER BY contribution_date DESC",
+             WHERE member_id = ?
+             ORDER BY contribution_date DESC",
         )
         .bind(&mid)
         .fetch_all(pool)
@@ -21,7 +22,8 @@ pub async fn get_welfare_contributions(
     } else {
         sqlx::query_as::<_, WelfareContribution>(
             "SELECT * FROM welfare_contributions
-             ORDER BY contribution_date DESC LIMIT 100",
+             ORDER BY contribution_date DESC
+             LIMIT 100",
         )
         .fetch_all(pool)
         .await?
@@ -35,8 +37,8 @@ pub async fn create_welfare_contribution(
     input: CreateWelfareInput,
 ) -> Result<WelfareContribution, AppError> {
     let pool = get_pool();
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let id   = Uuid::new_v4().to_string();
+    let now  = Utc::now().to_rfc3339();
 
     sqlx::query(
         "INSERT INTO welfare_contributions
@@ -55,14 +57,18 @@ pub async fn create_welfare_contribution(
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "welfare_contributions", &id, "insert").await;
-
+    // Fetch the full inserted row so we have the complete payload for sync
     let row = sqlx::query_as::<_, WelfareContribution>(
         "SELECT * FROM welfare_contributions WHERE id = ?",
     )
     .bind(&id)
     .fetch_one(pool)
     .await?;
+
+    // Queue the full row as the sync payload
+    let payload = serde_json::to_value(&row)
+        .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
+    queue_sync_payload(pool, "welfare_contributions", &id, "insert", payload).await;
 
     Ok(row)
 }
@@ -71,7 +77,8 @@ pub async fn create_welfare_contribution(
 pub async fn get_welfare_disbursements() -> Result<Vec<WelfareDisbursement>, AppError> {
     let pool = get_pool();
     let rows = sqlx::query_as::<_, WelfareDisbursement>(
-        "SELECT * FROM welfare_disbursements ORDER BY disbursement_date DESC",
+        "SELECT * FROM welfare_disbursements
+         ORDER BY disbursement_date DESC",
     )
     .fetch_all(pool)
     .await?;
@@ -83,8 +90,8 @@ pub async fn create_welfare_disbursement(
     input: CreateDisbursementInput,
 ) -> Result<WelfareDisbursement, AppError> {
     let pool = get_pool();
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now().to_rfc3339();
+    let id   = Uuid::new_v4().to_string();
+    let now  = Utc::now().to_rfc3339();
 
     sqlx::query(
         "INSERT INTO welfare_disbursements
@@ -102,14 +109,18 @@ pub async fn create_welfare_disbursement(
     .execute(pool)
     .await?;
 
-    queue_sync(pool, "welfare_disbursements", &id, "insert").await;
-
+    // Fetch the full inserted row so we have the complete payload for sync
     let row = sqlx::query_as::<_, WelfareDisbursement>(
         "SELECT * FROM welfare_disbursements WHERE id = ?",
     )
     .bind(&id)
     .fetch_one(pool)
     .await?;
+
+    // Queue the full row as the sync payload
+    let payload = serde_json::to_value(&row)
+        .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
+    queue_sync_payload(pool, "welfare_disbursements", &id, "insert", payload).await;
 
     Ok(row)
 }
@@ -125,7 +136,9 @@ pub async fn get_welfare_balance() -> Result<f64, AppError> {
     .await?;
 
     let disbursed: (f64,) = sqlx::query_as(
-        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_disbursements WHERE status = 'approved'",
+        "SELECT COALESCE(SUM(amount), 0.0)
+         FROM welfare_disbursements
+         WHERE status = 'approved'",
     )
     .fetch_one(pool)
     .await?;
