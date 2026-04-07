@@ -1,3 +1,7 @@
+import { useState, useEffect } from "react";
+import { tauriGetDashboardStats, tauriGetSyncPendingCount, type DashboardStats } from "@/lib/tauri";
+import { useAppStore } from "@/stores/appStore";
+
 import {
   Users,
   HandCoins,
@@ -60,6 +64,21 @@ const monthProgress = [
 // ─── Header actions ───────────────────────────────────────────────────────────
 
 function DashboardActions() {
+  const { setSyncStatus, syncStatus } = useAppStore();
+const [stats, setStats] = useState<DashboardStats | null>(null);
+
+useEffect(() => {
+  tauriGetDashboardStats()
+    .then(setStats)
+    .catch(console.error);
+
+  tauriGetSyncPendingCount()
+    .then((pending) =>
+      setSyncStatus({ ...syncStatus, pending })
+    )
+    .catch(console.error);
+}, []);
+
   return (
     <div className="flex items-center gap-2">
       {/* Date range */}
@@ -120,33 +139,30 @@ export function Dashboard() {
           {/* Tithe — hero card, dominant revenue metric */}
           <StatCard
             label="Tithe — This Month"
-            value={formatCurrency(18450)}
+            value={stats ? formatCurrency(stats.tithe_this_month) : "Loading…"}
             icon={HandCoins}
             color="gold"
-            trend={{ value: "12%", up: true }}
             size="large"
             className="xl:col-span-2"
           />
-          {/* Members */}
+          {/* Members — dimmed so financial cards dominate */}
           <StatCard
             label="Total Members"
-            value="248"
+            value={stats ? String(stats.total_members) : "—"}
             icon={Users}
             color="blue"
-            trend={{ value: "4 new", up: true }}
           />
           {/* Offerings */}
           <StatCard
             label="Offerings — Month"
-            value={formatCurrency(9200)}
+            value={stats ? formatCurrency(stats.offerings_this_month) : "—"}
             icon={Church}
             color="green"
-            trend={{ value: "3%", up: false }}
           />
           {/* Welfare */}
           <StatCard
             label="Welfare Fund"
-            value={formatCurrency(5800)}
+            value={stats ? formatCurrency(stats.welfare_balance) : "—"}
             icon={HeartHandshake}
             color="rose"
             sub="Available balance"
@@ -191,8 +207,8 @@ export function Dashboard() {
                           key={i}
                           className="flex items-center gap-3.5 px-5 py-3.5 border-b border-[#2E2840]/30 last:border-0 hover:bg-white/[0.025] transition-colors group cursor-default"
                         >
-                          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105", bg)}>
-                            <Icon size={14} className={color} />
+                          <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/5 transition-transform group-hover:scale-105", bg)}>
+                            <Icon size={15} className={color} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-white leading-snug truncate">{item.name}</p>
@@ -202,7 +218,7 @@ export function Dashboard() {
                             {item.amount > 0 && (
                               <p className="text-sm font-semibold text-white">{formatCurrency(item.amount)}</p>
                             )}
-                            <p className="text-xs text-[#5E5A72]">{item.time}</p>
+                            <p className="text-xs text-[#9490A8]">{item.time}</p>
                           </div>
                         </div>
                       );
@@ -221,12 +237,12 @@ export function Dashboard() {
               <CardHeader className="px-5 py-3.5">
                 <h2 className="text-sm font-semibold text-white">Quick Actions</h2>
               </CardHeader>
-              <CardContent className="px-4 pt-2.5 pb-4 space-y-1.5">
+              <CardContent className="px-4 pt-2.5 pb-4 space-y-2">
                 {quickActions.map(({ label, Icon, color, hover }) => (
                   <button
                     key={label}
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#211D30] border border-[#2E2840]",
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#211D30] border border-[#2E2840]",
                       "text-left transition-all duration-150 group cursor-pointer hover:-translate-y-px hover:shadow-md",
                       hover,
                     )}

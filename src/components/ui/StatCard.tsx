@@ -8,8 +8,10 @@ interface StatCardProps {
   icon: LucideIcon;
   color?: "gold" | "green" | "blue" | "rose";
   trend?: { value: string; up: boolean };
-  /** "large" gives the card a hero treatment — bigger value, gradient bg, progress accent */
+  /** "large" gives the card a hero treatment — bigger value, gradient bg */
   size?: "default" | "large";
+  /** dim reduces value size/contrast to visually subordinate this card to financial metrics */
+  dim?: boolean;
   className?: string;
 }
 
@@ -18,13 +20,13 @@ const palette = {
     icon:        "text-amber-400",
     bg:          "bg-amber-400/10",
     ring:        "border-amber-400/20",
-    accent:      "from-amber-400/70 via-amber-400/30 to-transparent",
+    accent:      "from-amber-400/60 via-amber-400/25 to-transparent",
     glow:        "bg-amber-400",
     hover:       "hover:border-amber-400/40",
     bar:         "from-amber-400 to-amber-400/20",
-    heroBg:      "bg-gradient-to-br from-[#201B2D] to-[#1C1828]",
-    heroBorder:  "border-amber-400/35",
-    heroHover:   "hover:border-amber-400/55",
+    heroBg:      "bg-gradient-to-br from-[#1E1A2B] to-[#1C1828]",
+    heroBorder:  "border-amber-400/25",
+    heroHover:   "hover:border-amber-400/40",
   },
   green: {
     icon:        "text-emerald-400",
@@ -72,6 +74,7 @@ export function StatCard({
   color = "gold",
   trend,
   size = "default",
+  dim = false,
   className,
 }: StatCardProps) {
   const p = palette[color];
@@ -92,8 +95,8 @@ export function StatCard({
         {/* Top accent strip — thicker & more vivid */}
         <div className={cn("absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r", p.accent)} />
 
-        {/* Radial glow blob */}
-        <div className={cn("absolute -top-10 -left-10 w-48 h-48 rounded-full blur-3xl opacity-[0.13]", p.glow)} />
+        {/* Radial glow blob — kept subtle so the accent strip is the sole focal point */}
+        <div className={cn("absolute -top-10 -left-10 w-48 h-48 rounded-full blur-3xl opacity-[0.07]", p.glow)} />
 
         {/* Row 1: icon + label left | trend badge right */}
         <div className="relative flex items-start justify-between mb-5">
@@ -131,10 +134,6 @@ export function StatCard({
           {value}
         </p>
 
-        {/* Progress accent bar */}
-        <div className="relative mt-5 h-[3px] bg-[#2E2840]/80 rounded-full overflow-hidden">
-          <div className={cn("h-full w-4/5 rounded-full bg-gradient-to-r", p.bar)} />
-        </div>
       </div>
     );
   }
@@ -152,8 +151,8 @@ export function StatCard({
       {/* Top accent strip */}
       <div className={cn("absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r", p.accent)} />
 
-      {/* Radial glow */}
-      <div className={cn("absolute -top-6 -left-6 w-24 h-24 rounded-full blur-2xl opacity-[0.08]", p.glow)} />
+      {/* Radial glow — hidden when dim so it doesn't compete with financial cards */}
+      {!dim && <div className={cn("absolute -top-6 -left-6 w-24 h-24 rounded-full blur-2xl opacity-[0.08]", p.glow)} />}
 
       {/* Icon + trend */}
       <div className="relative flex items-start justify-between mb-4">
@@ -183,8 +182,11 @@ export function StatCard({
         {label}
       </p>
 
-      {/* Value */}
-      <p className="relative text-xl font-bold text-white leading-none tracking-tight truncate">
+      {/* Value — dimmed cards use a smaller size and reduced contrast */}
+      <p className={cn(
+        "relative font-bold leading-none tracking-tight truncate",
+        dim ? "text-[17px] text-white/70" : "text-xl text-white"
+      )}>
         {value}
       </p>
 

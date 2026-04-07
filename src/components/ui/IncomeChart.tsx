@@ -164,12 +164,12 @@ export function IncomeChart() {
         >
           <defs>
             <linearGradient id="icTitheArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="#FBBF24" stopOpacity="0.22" />
-              <stop offset="70%"  stopColor="#FBBF24" stopOpacity="0.05" />
+              <stop offset="0%"   stopColor="#FBBF24" stopOpacity="0.14" />
+              <stop offset="70%"  stopColor="#FBBF24" stopOpacity="0.03" />
               <stop offset="100%" stopColor="#FBBF24" stopOpacity="0"    />
             </linearGradient>
             <linearGradient id="icOfferArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="#34D399" stopOpacity="0.12" />
+              <stop offset="0%"   stopColor="#34D399" stopOpacity="0.07" />
               <stop offset="100%" stopColor="#34D399" stopOpacity="0"    />
             </linearGradient>
             <linearGradient id="icTitheLine" x1="0" y1="0" x2="1" y2="0">
@@ -191,11 +191,11 @@ export function IncomeChart() {
               <g key={v}>
                 <line
                   x1={PAD.l} y1={y} x2={VW - PAD.r} y2={y}
-                  stroke="#2E2840" strokeWidth={0.8} strokeDasharray="3,5"
+                  stroke="#3A3658" strokeWidth={1} strokeDasharray="3,5"
                 />
                 <text
                   x={PAD.l - 7} y={y + 3.5}
-                  textAnchor="end" fontSize={7.5} fill="#7A7890"
+                  textAnchor="end" fontSize={7.5} fill="#9490A8"
                   fontFamily="JetBrains Mono, monospace"
                 >
                   {v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
@@ -219,7 +219,7 @@ export function IncomeChart() {
                 x={vx(i)} y={VH - 7}
                 textAnchor="middle"
                 fontSize={8}
-                fill={isLast ? "#FBBF24" : "#7A7890"}
+                fill={isLast ? "#FBBF24" : "#9490A8"}
                 fontWeight={isLast ? "700" : "500"}
               >
                 {d.month}

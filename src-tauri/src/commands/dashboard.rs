@@ -1,0 +1,98 @@
+use crate::db::get_pool;
+use crate::models::*;
+use chrono::{Utc, Datelike};
+
+#[tauri::command]
+pub async fn get_dashboard_stats() -> Result<DashboardStats, AppError> {
+    let pool = get_pool();
+    let now = Utc::now();
+    let month = now.month() as i64;
+    let year = now.year() as i64;
+    let month_prefix = format!("{:04}-{:02}%", year, month);
+
+    let total_members: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM members WHERE deleted_at IS NULL")
+            .fetch_one(pool)
+            .await?;
+
+    let active_members: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM members WHERE status = 'active' AND deleted_at IS NULL",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let tithe_month: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM tithe_payments
+         WHERE period_month = ? AND period_year = ?",
+    )
+    .bind(month)
+    .bind(year)
+    .fetch_one(pool)
+    .await?;
+
+    let offerings_month: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(total_amount), 0.0) FROM offerings
+         WHERE service_date LIKE ?",
+    )
+    .bind(&month_prefix)
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_contrib: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_contributions",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_disbursed_total: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_disbursements WHERE status = 'approved'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_disbursed_month: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_disbursements
+         WHERE status = 'approved' AND disbursement_date LIKE ?",
+    )
+    .bind(&month_prefix)
+    .fetch_one(pool)
+    .await?;
+
+    let tithe_payers: (i64,) = sqlx::query_as(
+        "SELECT COUNT(DISTINCT member_id) FROM tithe_payments
+         WHERE period_month = ? AND period_year = ?",
+    )
+    .bind(month)
+    .bind(year)
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_contributors: (i64,) = sqlx::query_as(
+        "SELECT COUNT(DISTINCT member_id) FROM welfare_contributions
+         WHERE contribution_date LIKE ?",
+    )
+    .bind(&month_prefix)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(DashboardStats {
+        total_members: total_members.0,
+        active_members: active_members.0,
+        tithe_this_month: tithe_month.0,
+        offerings_this_month: offerings_month.0,
+        welfare_balance: welfare_contrib.0 - welfare_disbursed_total.0,
+        welfare_disbursed_month: welfare_disbursed_month.0,
+        tithe_payers_month: tithe_payers.0,
+        welfare_contributors_month: welfare_contributors.0,
+    })
+}
+
+#[tauri::command]
+pub async fn get_sync_pending_count() -> Result<i64, AppError> {
+    let pool = get_pool();
+    let row: (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM sync_queue WHERE status = 'pending'")
+            .fetch_one(pool)
+            .await?;
+    Ok(row.0)
+}
