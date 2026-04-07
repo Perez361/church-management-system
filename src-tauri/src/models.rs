@@ -160,7 +160,8 @@ pub struct DashboardStats {
     pub welfare_contributors_month: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct MemberSummary {
     pub id: String,
     pub member_no: String,

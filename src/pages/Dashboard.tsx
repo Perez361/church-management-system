@@ -63,31 +63,18 @@ const monthProgress = [
 
 // ─── Header actions ───────────────────────────────────────────────────────────
 
-function DashboardActions() {
-  const { setSyncStatus, syncStatus } = useAppStore();
-const [stats, setStats] = useState<DashboardStats | null>(null);
-
-useEffect(() => {
-  tauriGetDashboardStats()
-    .then(setStats)
-    .catch(console.error);
-
-  tauriGetSyncPendingCount()
-    .then((pending) =>
-      setSyncStatus({ ...syncStatus, pending })
-    )
-    .catch(console.error);
-}, []);
-
+function DashboardActions({ stats, syncStatus, setSyncStatus }: {
+  stats: DashboardStats | null;
+  syncStatus: any;
+  setSyncStatus: (s: any) => void;
+}) {
   return (
     <div className="flex items-center gap-2">
-      {/* Date range */}
       <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1C1828] border border-[#2E2840] text-xs text-[#8B879C] hover:text-white hover:border-[#3E3858] hover:bg-[#211D30] transition-all">
         <CalendarDays size={11} className="text-amber-400" />
         Apr 2026
         <ChevronDown size={10} />
       </button>
-      {/* Export */}
       <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1C1828] border border-[#2E2840] text-xs text-[#8B879C] hover:text-white hover:border-[#3E3858] hover:bg-[#211D30] transition-all">
         <Download size={11} />
         Export
@@ -96,16 +83,20 @@ useEffect(() => {
   );
 }
 
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function Dashboard() {
-  const dateStr = new Date().toLocaleDateString("en-GH", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const { setSyncStatus, syncStatus } = useAppStore();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
+  useEffect(() => {
+    tauriGetDashboardStats().then(setStats).catch(console.error);
+    tauriGetSyncPendingCount()
+      .then((pending) => setSyncStatus({ ...syncStatus, pending }))
+      .catch(console.error);
+  }, []);
+  
   return (
     <div>
       <Header
