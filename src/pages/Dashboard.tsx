@@ -96,13 +96,24 @@ export function Dashboard() {
       .then((pending) => setSyncStatus({ ...syncStatus, pending }))
       .catch(console.error);
   }, []);
-  
+  const dateStr = new Date().toLocaleDateString("en-GB", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
   return (
     <div>
       <Header
         title="Dashboard"
         subtitle={dateStr}
-        actions={<DashboardActions />}
+        actions={
+  <DashboardActions
+    stats={stats}
+    syncStatus={syncStatus}
+    setSyncStatus={setSyncStatus}
+  />
+}
       />
 
       <div className="p-6 space-y-4">
