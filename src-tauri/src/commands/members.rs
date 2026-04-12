@@ -63,8 +63,8 @@ pub async fn create_member(input: CreateMemberInput) -> Result<Member, AppError>
         "INSERT INTO members
          (id, member_no, first_name, last_name, date_of_birth, gender,
           phone, email, address, department_id, membership_date, status,
-          created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          photo_url, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
     .bind(&id)
     .bind(&member_no)
@@ -78,6 +78,7 @@ pub async fn create_member(input: CreateMemberInput) -> Result<Member, AppError>
     .bind(&input.department_id)
     .bind(&input.membership_date)
     .bind(&status)
+    .bind(&input.photo_url)
     .bind(&now)
     .bind(&now)
     .execute(pool)

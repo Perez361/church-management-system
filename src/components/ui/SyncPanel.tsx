@@ -7,12 +7,13 @@ import { cn } from "@/lib/utils";
 import { tauriTriggerSync, tauriGetSyncStats, type SyncStats } from "@/lib/tauri";
 import { useAppStore } from "@/stores/appStore";
 
+
 export function SyncPanel() {
   const [stats,   setStats]   = useState<SyncStats | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [msg,     setMsg]     = useState("");
   const [msgType, setMsgType] = useState<"ok" | "err">("ok");
-  const { setSyncStatus, syncStatus } = useAppStore();
+  const { setSyncStatus, syncStatus, addNotification } = useAppStore();
 
   const loadStats = useCallback(async () => {
     try {
@@ -38,12 +39,23 @@ export function SyncPanel() {
 
   async function handleSync() {
     if (syncing) return;
+
+    // Guard: check internet before wasting retries on offline state
+    if (!navigator.onLine) {
+      const offlineMsg = "No internet connection. Please connect to a network and try again.";
+      setMsg(offlineMsg);
+      setMsgType("err");
+      addNotification({ title: "Sync skipped", message: offlineMsg, type: "warning" });
+      return;
+    }
+
     setSyncing(true);
     setMsg("");
     try {
       const result = await tauriTriggerSync();
       setMsg(result);
       setMsgType("ok");
+      addNotification({ title: "Sync complete", message: result, type: "success" });
       // Give the background task a moment then refresh stats
       setTimeout(loadStats, 3000);
       setTimeout(loadStats, 8000);
@@ -51,6 +63,7 @@ export function SyncPanel() {
       const text = e instanceof Error ? e.message : String(e);
       setMsg(text);
       setMsgType("err");
+      addNotification({ title: "Sync failed", message: text, type: "error" });
     } finally {
       setSyncing(false);
     }

@@ -22,6 +22,7 @@ struct QueueRow {
     pub record_id:   String,
     pub operation:   String,
     pub payload:     String,
+    #[allow(dead_code)]
     pub retry_count: i64,
 }
 
@@ -73,8 +74,14 @@ pub async fn run_sync() {
 
     let mut synced = 0usize;
     let mut failed = 0usize;
+    let mut network_down = false;
 
     for item in &pending {
+        // If we already detected the network is down, stop trying — preserve retries.
+        if network_down {
+            break;
+        }
+
         let now = Utc::now().to_rfc3339();
 
         match push_item(&client, item).await {
@@ -92,12 +99,36 @@ pub async fn run_sync() {
                 synced += 1;
             }
             Err(e) => {
+                // Detect network-level failures (no internet / DNS / timeout).
+                // These are NOT the remote server rejecting the payload — they mean
+                // the device is offline. We must NOT burn retry attempts in this case;
+                // items stay 'pending' and will be retried on the next sync cycle.
+                let is_network_err = e.contains("error sending request")
+                    || e.contains("connection refused")
+                    || e.contains("timed out")
+                    || e.contains("timeout")
+                    || e.contains("dns error")
+                    || e.contains("failed to lookup address")
+                    || e.contains("No route to host")
+                    || e.contains("network is unreachable");
+
+                if is_network_err {
+                    println!(
+                        "⚠️  Network unavailable — stopping sync, retries preserved \
+                         [{}/{}]",
+                        item.table_name, item.record_id
+                    );
+                    network_down = true;
+                    // Leave status = 'pending', retry_count unchanged.
+                    break;
+                }
+
                 println!(
                     "❌ Sync failed [{} / {}]: {}",
                     item.table_name, item.record_id, e
                 );
 
-                // Increment retry; mark as 'failed' after 5 attempts
+                // HTTP-level error (4xx / 5xx) — increment retry; mark failed after 5.
                 let _ = sqlx::query(
                     "UPDATE sync_queue
                      SET retry_count = retry_count + 1,
@@ -116,7 +147,11 @@ pub async fn run_sync() {
         }
     }
 
-    println!("✅ Sync complete — {} synced, {} failed", synced, failed);
+    if network_down {
+        println!("📡 Sync paused — device appears offline. Will retry automatically.");
+    } else {
+        println!("✅ Sync complete — {} synced, {} failed", synced, failed);
+    }
 }
 
 /// Returns live counts from the sync_queue table.

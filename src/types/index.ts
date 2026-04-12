@@ -1,5 +1,14 @@
 export type UserRole = "admin" | "pastor" | "treasurer" | "clerk";
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: "success" | "error" | "info" | "warning";
+  time: string;   // ISO string
+  read: boolean;
+}
+
 export interface User {
   id: string;
   name: string;

@@ -1,20 +1,14 @@
 import { useState } from "react";
 import { SyncPanel } from "@/components/ui/SyncPanel";
 import {
-  User, Bell, Database, Info, Save, Upload, Shield,
+  User, Bell, Database, Info, Save, Upload, Shield, FileDown,
 } from "lucide-react";
+import { NavLink } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { ExportButton } from "@/components/ui/ExportButton";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/appStore";
-import {
-  tauriExportMembersExcel,
-  tauriExportTitheExcel,
-  tauriExportOfferingsExcel,
-  tauriExportWelfareExcel,
-} from "@/lib/tauri";
 
 type Tab = "profile" | "preferences" | "data" | "about";
 
@@ -89,8 +83,6 @@ export function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const { user } = useAppStore();
   const initials = user?.name.split(" ").map((n) => n[0]).join("").slice(0, 2) ?? "AU";
-  const thisYear = new Date().getFullYear();
-
   return (
     <div>
       <Header title="Settings" subtitle="System configuration" />
@@ -248,34 +240,22 @@ export function SettingsPage() {
   </CardContent>
 </Card>
 
-              {/* Export */}
+              {/* Export — moved to its own page */}
               <Card>
                 <CardHeader className="px-6 py-4">
                   <h2 className="text-sm font-semibold text-white">Export Data</h2>
                   <p className="text-xs text-[#9490A8] mt-0.5">
-                    Files are saved as formatted Excel spreadsheets to your Downloads folder.
-                    Includes alternating row colours, GHS currency formatting, and a totals row.
+                    Excel and PDF exports have moved to the dedicated Export page.
                   </p>
                 </CardHeader>
                 <CardContent className="px-6 py-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <ExportButton
-                      label="Members (Excel)"
-                      action={tauriExportMembersExcel}
-                    />
-                    <ExportButton
-                      label={`Tithe ${thisYear} (Excel)`}
-                      action={() => tauriExportTitheExcel(thisYear)}
-                    />
-                    <ExportButton
-                      label={`Offerings ${thisYear} (Excel)`}
-                      action={() => tauriExportOfferingsExcel(thisYear)}
-                    />
-                    <ExportButton
-                      label={`Welfare ${thisYear} (Excel)`}
-                      action={() => tauriExportWelfareExcel(thisYear)}
-                    />
-                  </div>
+                  <NavLink
+                    to="/export"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-400/10 border border-amber-400/30 text-amber-400 text-sm font-medium hover:bg-amber-400/20 hover:border-amber-400/50 transition-all"
+                  >
+                    <FileDown size={14} />
+                    Go to Export Page →
+                  </NavLink>
                 </CardContent>
               </Card>
 
@@ -335,7 +315,7 @@ export function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white" style={{ fontFamily: "var(--font-display)" }}>
-                    Church CMS
+                    CMS
                   </h2>
                   <p className="text-sm text-[#9490A8] mt-1">Church Management System</p>
                 </div>
@@ -351,7 +331,7 @@ export function SettingsPage() {
                   offline-first with Supabase cloud sync.
                 </p>
                 <div className="pt-4 border-t border-[#2E2840] w-full text-xs text-[#9490A8]">
-                  © {new Date().getFullYear()} Church CMS. All rights reserved.
+                  © {new Date().getFullYear()}CMS. All rights reserved.
                 </div>
               </CardContent>
             </Card>

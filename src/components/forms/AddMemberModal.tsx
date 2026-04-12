@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { UserPlus } from "lucide-react";
+import { useState, useRef } from "react";
+import { UserPlus, Camera, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, Input, Select, Textarea } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
@@ -30,12 +30,14 @@ interface FormState {
   date_of_birth: string; phone: string; email: string;
   address: string; department_id: string;
   membership_date: string; status: string;
+  photo_url: string;
 }
 
 const EMPTY: FormState = {
   first_name: "", last_name: "", gender: "male", date_of_birth: "",
   phone: "", email: "", address: "", department_id: "",
   membership_date: new Date().toISOString().split("T")[0], status: "active",
+  photo_url: "",
 };
 
 type Errors = Partial<Record<keyof FormState, string>>;
@@ -45,10 +47,27 @@ export function AddMemberModal({ open, onClose, onSuccess }: Props) {
   const [errors, setErrors]       = useState<Errors>({});
   const [loading, setLoading]     = useState(false);
   const [serverErr, setServerErr] = useState("");
+  const fileInputRef              = useRef<HTMLInputElement>(null);
 
   function field(key: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setForm((f) => ({ ...f, photo_url: (ev.target?.result as string) ?? "" }));
+    };
+    reader.readAsDataURL(file);
+    // Reset so the same file can be re-selected if cleared
+    e.target.value = "";
+  }
+
+  function clearPhoto() {
+    setForm((f) => ({ ...f, photo_url: "" }));
   }
 
   function validate(): boolean {
@@ -61,7 +80,7 @@ export function AddMemberModal({ open, onClose, onSuccess }: Props) {
     return Object.keys(e).length === 0;
   }
 
-  async function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.SyntheticEvent<HTMLFormElement>) {
     ev.preventDefault();
     if (!validate()) return;
     setLoading(true);
@@ -78,6 +97,7 @@ export function AddMemberModal({ open, onClose, onSuccess }: Props) {
         department_id:   form.department_id   || undefined,
         membership_date: form.membership_date,
         status:          form.status,
+        photo_url:       form.photo_url       || undefined,
       };
       await tauriCreateMember(input);
       reset(); onSuccess(); onClose();
@@ -90,6 +110,8 @@ export function AddMemberModal({ open, onClose, onSuccess }: Props) {
 
   function reset() { setForm(EMPTY); setErrors({}); setServerErr(""); }
 
+  const initials = `${form.first_name?.[0] ?? ""}${form.last_name?.[0] ?? ""}`.toUpperCase() || "?";
+
   return (
     <Modal open={open} onClose={() => { reset(); onClose(); }}
       title="Add New Member" subtitle="Register a new church member" width="lg">
@@ -100,6 +122,55 @@ export function AddMemberModal({ open, onClose, onSuccess }: Props) {
             {serverErr}
           </div>
         )}
+
+        {/* ── Photo picker ──────────────────────────────────────────── */}
+        <div className="flex items-center gap-4 pb-2">
+          {/* Avatar preview */}
+          <div className="relative shrink-0 group">
+            {form.photo_url ? (
+              <img
+                src={form.photo_url}
+                alt="Member photo"
+                className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400/30 shadow"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-2xl bg-amber-400/15 border-2 border-amber-400/25 flex items-center justify-center text-amber-400 text-xl font-bold select-none">
+                {initials}
+              </div>
+            )}
+
+            {/* Quick-clear overlay */}
+            {form.photo_url && (
+              <button
+                type="button"
+                onClick={clearPhoto}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-400 flex items-center justify-center shadow hover:bg-rose-300 transition-colors"
+              >
+                <X size={10} className="text-white" />
+              </button>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#211D30] border border-[#2E2840] text-sm text-[#9490A8] hover:text-white hover:border-white/20 transition-all"
+            >
+              <Camera size={13} />
+              {form.photo_url ? "Change Photo" : "Choose Photo"}
+            </button>
+            <p className="text-[11px] text-[#5E5A72] mt-1.5">JPG, PNG or WEBP. Optional.</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-4">
           <FormField label="First Name" required error={errors.first_name}>

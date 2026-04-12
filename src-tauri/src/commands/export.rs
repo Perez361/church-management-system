@@ -101,15 +101,17 @@ pub async fn export_members_excel() -> Result<String, AppError> {
         "Phone", "Email", "Department", "Membership Date", "Status",
     ])?;
 
-    let dept_label = |d: Option<&str>| match d {
-        Some("choir")         => "Choir",
-        Some("ushers")        => "Ushers",
-        Some("youth")         => "Youth",
-        Some("elders")        => "Elders",
-        Some("sunday_school") => "Sunday School",
-        Some(other)           => other,
-        None                  => "—",
-    };
+    fn dept_label(d: Option<&str>) -> &str {
+        match d {
+            Some("choir")         => "Choir",
+            Some("ushers")        => "Ushers",
+            Some("youth")         => "Youth",
+            Some("elders")        => "Elders",
+            Some("sunday_school") => "Sunday School",
+            Some(other)           => other,
+            None                  => "—",
+        }
+    }
 
     let alt = alt_fmt();
 
@@ -180,8 +182,9 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
         .map_err(|e| AppError { message: e.to_string(), code: "EXPORT".into() })?;
 
     write_headers(ws, &[
-        "Member", "Member No", "Amount (GHS)", "Payment Date",
+        "Member", "Member No", "Tithe Amount (GHS)", "Payment Date",
         "Period Month", "Payment Mode", "Reference", "Received By",
+        "20% Portion (GHS)", "60% Portion (GHS)", "20% Balance (GHS)",
     ])?;
 
     let cf  = currency_fmt();
@@ -195,26 +198,35 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
 
-    let mut total = 0.0_f64;
+    let mut total        = 0.0_f64;
+    let mut total_part_a = 0.0_f64; // 20%
+    let mut total_part_b = 0.0_f64; // 60%
+    let mut total_part_c = 0.0_f64; // 20% balance
 
     for (i, row) in rows.iter().enumerate() {
-        let r   = (i + 1) as u32;
-        let odd = i % 2 == 1;
-        let name  = format!("{} {}", row.first_name, row.last_name);
-        let month = month_names
+        let r        = (i + 1) as u32;
+        let odd      = i % 2 == 1;
+        let name     = format!("{} {}", row.first_name, row.last_name);
+        let month    = month_names
             .get(row.period_month as usize)
             .copied()
             .unwrap_or("?");
+        let part_a   = row.amount * 0.20;
+        let part_b   = row.amount * 0.60;
+        let part_c   = row.amount * 0.20; // remaining 20%
 
         if odd {
-            ws.write_with_format(r, 0, &name,                                    &alt).ok();
-            ws.write_with_format(r, 1, &row.member_no,                           &alt).ok();
-            ws.write_with_format(r, 2, row.amount,                               &acf).ok();
-            ws.write_with_format(r, 3, &row.payment_date,                        &alt).ok();
-            ws.write_with_format(r, 4, month,                                    &alt).ok();
-            ws.write_with_format(r, 5, &row.payment_mode,                        &alt).ok();
+            ws.write_with_format(r, 0, &name,                                      &alt).ok();
+            ws.write_with_format(r, 1, &row.member_no,                             &alt).ok();
+            ws.write_with_format(r, 2, row.amount,                                 &acf).ok();
+            ws.write_with_format(r, 3, &row.payment_date,                          &alt).ok();
+            ws.write_with_format(r, 4, month,                                      &alt).ok();
+            ws.write_with_format(r, 5, &row.payment_mode,                          &alt).ok();
             ws.write_with_format(r, 6, row.reference_no.as_deref().unwrap_or("—"), &alt).ok();
-            ws.write_with_format(r, 7, &row.received_by,                         &alt).ok();
+            ws.write_with_format(r, 7, &row.received_by,                           &alt).ok();
+            ws.write_with_format(r, 8,  part_a,                                    &acf).ok();
+            ws.write_with_format(r, 9,  part_b,                                    &acf).ok();
+            ws.write_with_format(r, 10, part_c,                                    &acf).ok();
         } else {
             ws.write(r, 0, &name).ok();
             ws.write(r, 1, &row.member_no).ok();
@@ -224,15 +236,24 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
             ws.write(r, 5, &row.payment_mode).ok();
             ws.write(r, 6, row.reference_no.as_deref().unwrap_or("—")).ok();
             ws.write(r, 7, &row.received_by).ok();
+            ws.write_with_format(r, 8,  part_a, &cf).ok();
+            ws.write_with_format(r, 9,  part_b, &cf).ok();
+            ws.write_with_format(r, 10, part_c, &cf).ok();
         }
 
-        total += row.amount;
+        total        += row.amount;
+        total_part_a += part_a;
+        total_part_b += part_b;
+        total_part_c += part_c;
     }
 
     // Totals row
     let tr = (rows.len() + 1) as u32;
-    ws.write_with_format(tr, 1, "TOTAL", &bf).ok();
-    ws.write_with_format(tr, 2, total,   &bcf).ok();
+    ws.write_with_format(tr, 1,  "TOTAL",       &bf).ok();
+    ws.write_with_format(tr, 2,  total,          &bcf).ok();
+    ws.write_with_format(tr, 8,  total_part_a,   &bcf).ok();
+    ws.write_with_format(tr, 9,  total_part_b,   &bcf).ok();
+    ws.write_with_format(tr, 10, total_part_c,   &bcf).ok();
 
     ws.autofit();
     save(&mut wb, &format!("tithe_{}.xlsx", year))
@@ -395,4 +416,80 @@ pub async fn export_welfare_excel(year: i64) -> Result<String, AppError> {
 
     ws.autofit();
     save(&mut wb, &format!("welfare_{}.xlsx", year))
+}
+
+// ── Export Summary ────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct ExportSummary {
+    pub total_members:          i64,
+    pub active_members:         i64,
+    pub total_tithe_year:       f64,
+    pub total_offerings_year:   f64,
+    pub total_welfare_contrib:  f64,
+    pub total_welfare_disbursed: f64,
+    pub net_welfare_balance:    f64,
+    pub tithe_20_pct:           f64,
+    pub tithe_60_pct:           f64,
+    pub tithe_20_balance:       f64,
+}
+
+#[tauri::command]
+pub async fn get_export_summary(year: i64) -> Result<ExportSummary, crate::models::AppError> {
+    let pool = get_pool();
+
+    let members: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM members WHERE deleted_at IS NULL",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let active: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM members WHERE deleted_at IS NULL AND status = 'active'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let tithe_year: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM tithe_payments WHERE period_year = ?",
+    )
+    .bind(year)
+    .fetch_one(pool)
+    .await?;
+
+    let offerings_year: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(total_amount), 0.0)
+         FROM offerings WHERE strftime('%Y', service_date) = ?",
+    )
+    .bind(year.to_string())
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_contrib: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_contributions",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let welfare_disbursed: (f64,) = sqlx::query_as(
+        "SELECT COALESCE(SUM(amount), 0.0)
+         FROM welfare_disbursements WHERE status = 'approved'",
+    )
+    .fetch_one(pool)
+    .await?;
+
+    let t = tithe_year.0;
+
+    Ok(ExportSummary {
+        total_members:           members.0,
+        active_members:          active.0,
+        total_tithe_year:        t,
+        total_offerings_year:    offerings_year.0,
+        total_welfare_contrib:   welfare_contrib.0,
+        total_welfare_disbursed: welfare_disbursed.0,
+        net_welfare_balance:     welfare_contrib.0 - welfare_disbursed.0,
+        tithe_20_pct:            t * 0.20,
+        tithe_60_pct:            t * 0.60,
+        tithe_20_balance:        t * 0.20,
+    })
 }

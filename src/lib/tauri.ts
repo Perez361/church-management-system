@@ -95,6 +95,7 @@ export interface CreateMemberInput {
   department_id?: string;
   membership_date: string;
   status?: string;
+  photo_url?: string;
 }
 
 export const tauriCreateMember = (input: CreateMemberInput) =>
@@ -144,6 +145,14 @@ export interface CreateOfferingInput {
 export const tauriGetOfferings = (fromDate?: string, toDate?: string) =>
   invoke<Offering[]>("get_offerings", { fromDate, toDate });
 
+export interface OfferingsSummary {
+  monthly:     { month: number; total: number }[];
+  by_category: { category: string; total: number }[];
+}
+
+export const tauriGetOfferingsSummary = (year: number) =>
+  invoke<OfferingsSummary>("get_offerings_summary", { year });
+
 export const tauriCreateOffering = (input: CreateOfferingInput) =>
   invoke<Offering>("create_offering", { input });
 
@@ -166,6 +175,32 @@ export const tauriCreateWelfareContribution = (input: CreateWelfareInput) =>
 
 export const tauriGetWelfareBalance = () =>
   invoke<number>("get_welfare_balance");
+
+export interface WelfareDisbursement {
+  id: string;
+  beneficiary_id: string;
+  amount: number;
+  reason: string;
+  disbursement_date: string;
+  approved_by: string;
+  status: string;
+  created_at: string;
+  synced_at?: string;
+}
+
+export interface CreateDisbursementInput {
+  beneficiary_id: string;
+  amount: number;
+  reason: string;
+  disbursement_date: string;
+  approved_by: string;
+}
+
+export const tauriGetWelfareDisbursements = () =>
+  invoke<WelfareDisbursement[]>("get_welfare_disbursements");
+
+export const tauriCreateWelfareDisbursement = (input: CreateDisbursementInput) =>
+  invoke<WelfareDisbursement>("create_welfare_disbursement", { input });
 
 // ── Dashboard commands ──────────────────────────────────────────────────────
 
@@ -200,4 +235,20 @@ export const tauriExportOfferingsExcel = (year: number) =>
 
 export const tauriExportWelfareExcel   = (year: number) =>
   invoke<string>("export_welfare_excel", { year });
+
+export interface ExportSummary {
+  total_members:           number;
+  active_members:          number;
+  total_tithe_year:        number;
+  total_offerings_year:    number;
+  total_welfare_contrib:   number;
+  total_welfare_disbursed: number;
+  net_welfare_balance:     number;
+  tithe_20_pct:            number;
+  tithe_60_pct:            number;
+  tithe_20_balance:        number;
+}
+
+export const tauriGetExportSummary = (year: number) =>
+  invoke<ExportSummary>("get_export_summary", { year });
 

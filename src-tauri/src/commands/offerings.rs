@@ -1,6 +1,6 @@
 use crate::db::get_pool;
 use crate::models::*;
-use crate::commands::members::{queue_sync, queue_sync_payload};
+use crate::commands::members::queue_sync_payload;
 use chrono::Utc;
 use uuid::Uuid;
 

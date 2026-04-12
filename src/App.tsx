@@ -7,6 +7,7 @@ import { OfferingsPage } from "@/pages/offerings/OfferingsPage";
 import { WelfarePage } from "@/pages/welfare/WelfarePage";
 import { ReportsPage } from "@/pages/reports/ReportsPage";
 import { SettingsPage } from "@/pages/settings/SettingsPage";
+import { ExportPage } from "@/pages/export/ExportPage";
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/offerings" element={<OfferingsPage />} />
           <Route path="/welfare" element={<WelfarePage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/export" element={<ExportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>

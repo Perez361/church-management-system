@@ -33,6 +33,7 @@ pub struct CreateMemberInput {
     pub department_id: Option<String>,
     pub membership_date: String,
     pub status: Option<String>,
+    pub photo_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

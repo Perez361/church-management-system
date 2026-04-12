@@ -1,19 +1,20 @@
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Users, HandCoins, Church,
-  HeartHandshake, BarChart3, Settings, ChevronLeft,
-  ChevronRight, Cross,
+  HeartHandshake, BarChart3, Settings, FileDown,
+  Cross, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/members", icon: Users, label: "Members" },
-  { to: "/tithe", icon: HandCoins, label: "Tithe" },
-  { to: "/offerings", icon: Church, label: "Offerings" },
-  { to: "/welfare", icon: HeartHandshake, label: "Welfare" },
-  { to: "/reports", icon: BarChart3, label: "Reports" },
+  { to: "/",          icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/members",   icon: Users,           label: "Members"   },
+  { to: "/tithe",     icon: HandCoins,       label: "Tithe"     },
+  { to: "/offerings", icon: Church,          label: "Offerings" },
+  { to: "/welfare",   icon: HeartHandshake,  label: "Welfare"   },
+  { to: "/reports",   icon: BarChart3,       label: "Reports"   },
+  { to: "/export",    icon: FileDown,        label: "Export"    },
 ];
 
 const bottomItems = [
@@ -26,7 +27,8 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col h-screen bg-[#15121F] border-r border-[#2E2840] transition-all duration-300 shrink-0",
+        "relative flex flex-col h-screen bg-[#15121F] border-r border-[#2E2840]",
+        "transition-all duration-300 shrink-0 overflow-visible",
         sidebarCollapsed ? "w-16" : "w-52"
       )}
     >
@@ -38,7 +40,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
             <div className="text-sm font-bold text-white leading-tight truncate tracking-tight">
-              Church CMS
+              Church
             </div>
             <div className="text-[10px] text-[#9490A8]/70 truncate">Management System</div>
           </div>
@@ -63,7 +65,6 @@ export function Sidebar() {
           >
             {({ isActive }) => (
               <>
-                {/* Left accent bar */}
                 {isActive && (
                   <span className="absolute left-0 inset-y-1.5 w-0.5 rounded-r-full bg-amber-400" />
                 )}
@@ -115,7 +116,7 @@ export function Sidebar() {
       )}
 
       {/* Bottom */}
-      <div className="px-2 pb-2 space-y-0.5 border-t border-[#2E2840] pt-2">
+      <div className="px-2 pb-4 space-y-0.5 border-t border-[#2E2840] pt-2">
         {bottomItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
@@ -146,15 +147,33 @@ export function Sidebar() {
             )}
           </div>
         )}
-
-        {/* Collapse toggle */}
-        <button
-          onClick={toggleSidebar}
-          className="w-full flex items-center justify-center py-2 rounded-xl text-[#9490A8] hover:text-white hover:bg-white/5 transition-all"
-        >
-          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
       </div>
+
+      {/* ── Floating edge toggle ──────────────────────────────────────────────── */}
+      {/* A pill-shaped tab that peeks out from the right edge of the sidebar.    */}
+      {/* It sits at vertical mid-point, always visible, and glows on hover.      */}
+      <button
+        onClick={toggleSidebar}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        style={{ top: "50%", right: 0, transform: "translate(50%, -50%)" }}
+        className={cn(
+          "absolute z-50",
+          "w-5 h-10 rounded-full",
+          "flex items-center justify-center",
+          "bg-[#1C1828] border border-[#2E2840]",
+          "text-[#9490A8]",
+          "shadow-[0_2px_12px_rgba(0,0,0,0.4)]",
+          "transition-all duration-200",
+          "hover:bg-amber-400/10 hover:border-amber-400/40",
+          "hover:text-amber-400 hover:shadow-[0_0_16px_rgba(251,191,36,0.25)]",
+          "group",
+        )}
+      >
+        {sidebarCollapsed
+          ? <ChevronRight size={10} className="transition-transform group-hover:scale-125" />
+          : <ChevronLeft  size={10} className="transition-transform group-hover:scale-125" />
+        }
+      </button>
     </aside>
   );
 }

@@ -83,6 +83,7 @@ pub fn run() {
             export_tithe_excel,
             export_offerings_excel,
             export_welfare_excel,
+            get_export_summary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

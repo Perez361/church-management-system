@@ -1,41 +1,27 @@
 /**
- * SVG line chart — two-series (tithe + offerings).
+ * SVG line chart — two-series (tithe + offerings), live data from Tauri.
  * Uses Catmull-Rom → Cubic-Bézier conversion for smooth curves.
- * Supports hover tooltip via HTML overlay.
  */
 
-import { useState, useRef } from "react";
-
-const monthlyData = [
-  { month: "Nov", tithe: 14200, offerings: 7800 },
-  { month: "Dec", tithe: 16800, offerings: 9200 },
-  { month: "Jan", tithe: 15400, offerings: 8100 },
-  { month: "Feb", tithe: 17200, offerings: 8900 },
-  { month: "Mar", tithe: 16100, offerings: 8500 },
-  { month: "Apr", tithe: 18450, offerings: 9200 },
-];
+import { useState, useRef, useEffect, useMemo } from "react";
+import { tauriGetTitheSummary, tauriGetOfferingsSummary } from "@/lib/tauri";
 
 // ── SVG coordinate constants ──────────────────────────────────────────────────
-const VW = 560;
-const VH = 140;
+const VW  = 560;
+const VH  = 140;
 const PAD = { l: 48, r: 16, t: 14, b: 30 };
-const PW = VW - PAD.l - PAD.r;
-const PH = VH - PAD.t - PAD.b;
+const PW  = VW - PAD.l - PAD.r;
+const PH  = VH - PAD.t - PAD.b;
 
-const Y_MIN = 0;
-const Y_MAX = 22000;
-const Y_RANGE = Y_MAX - Y_MIN;
+const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-const GRID_VALS = [5000, 10000, 15000, 20000];
-
-function vy(v: number) {
-  return PAD.t + (1 - (v - Y_MIN) / Y_RANGE) * PH;
+function vy(v: number, yMax: number) {
+  return PAD.t + (1 - v / Math.max(yMax, 1)) * PH;
 }
-function vx(i: number) {
-  return PAD.l + (i / (monthlyData.length - 1)) * PW;
+function vx(i: number, len: number) {
+  return PAD.l + (i / Math.max(len - 1, 1)) * PW;
 }
 
-// ── Catmull-Rom → cubic Bézier path ─────────────────────────────────────────
 function smoothPath(pts: { x: number; y: number }[], tension = 0.35): string {
   if (pts.length < 2) return "";
   let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
@@ -53,71 +39,109 @@ function smoothPath(pts: { x: number; y: number }[], tension = 0.35): string {
   return d;
 }
 
-// Pre-compute point arrays
-const tithePts = monthlyData.map((d, i) => ({ x: vx(i), y: vy(d.tithe) }));
-const offerPts = monthlyData.map((d, i) => ({ x: vx(i), y: vy(d.offerings) }));
-const bottomY  = PAD.t + PH;
-const lastIdx  = monthlyData.length - 1;
-
-const titheSmoothLine = smoothPath(tithePts);
-const offerSmoothLine = smoothPath(offerPts);
-
-const titheAreaPath =
-  titheSmoothLine +
-  ` L${tithePts[lastIdx].x.toFixed(2)},${bottomY} L${tithePts[0].x.toFixed(2)},${bottomY} Z`;
-const offerAreaPath =
-  offerSmoothLine +
-  ` L${offerPts[lastIdx].x.toFixed(2)},${bottomY} L${offerPts[0].x.toFixed(2)},${bottomY} Z`;
-
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function IncomeChart() {
-  const last      = monthlyData[lastIdx];
-  const prev      = monthlyData[lastIdx - 1];
-  const lastTotal = last.tithe + last.offerings;
-  const prevTotal = prev.tithe + prev.offerings;
-  const growth    = (((lastTotal - prevTotal) / prevTotal) * 100).toFixed(1);
+  const now      = new Date();
+  const year     = now.getFullYear();
+  const prevYear = year - 1;
+
+  const [titheThis,  setTitheThis]  = useState<{ month: number; total: number }[]>([]);
+  const [tithePrev,  setTithePrev]  = useState<{ month: number; total: number }[]>([]);
+  const [offerThis,  setOfferThis]  = useState<{ month: number; total: number }[]>([]);
+  const [offerPrev,  setOfferPrev]  = useState<{ month: number; total: number }[]>([]);
+
+  useEffect(() => {
+    tauriGetTitheSummary(year).then(setTitheThis).catch(console.error);
+    tauriGetTitheSummary(prevYear).then(setTithePrev).catch(console.error);
+    tauriGetOfferingsSummary(year)
+      .then((s) => setOfferThis(s.monthly))
+      .catch(console.error);
+    tauriGetOfferingsSummary(prevYear)
+      .then((s) => setOfferPrev(s.monthly))
+      .catch(console.error);
+  }, []);
+
+  // ── Build last 6 months of data ───────────────────────────────────────────
+  const monthlyData = useMemo(() => {
+    return Array.from({ length: 6 }, (_, i) => {
+      const d    = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const m    = d.getMonth() + 1;
+      const y    = d.getFullYear();
+      const isCurrentYear = y === year;
+
+      const titheArr = isCurrentYear ? titheThis : tithePrev;
+      const offerArr = isCurrentYear ? offerThis  : offerPrev;
+
+      return {
+        month:    MONTH_LABELS[m - 1],
+        year:     y,
+        isLast:   i === 5,
+        tithe:    titheArr.find(t => t.month === m)?.total     ?? 0,
+        offerings: offerArr.find(o => o.month === m)?.total    ?? 0,
+      };
+    });
+  }, [titheThis, tithePrev, offerThis, offerPrev]);
+
+  // ── Chart math ────────────────────────────────────────────────────────────
+  const allVals = monthlyData.flatMap(d => [d.tithe, d.offerings]);
+  const rawMax  = Math.max(...allVals, 1000);
+  const Y_MAX   = Math.ceil(rawMax / 5000) * 5000;
+  const GRID_VALS = [0.25, 0.5, 0.75, 1].map(f => Math.round(Y_MAX * f));
+
+  const len      = monthlyData.length;
+  const bottomY  = PAD.t + PH;
+  const lastIdx  = len - 1;
+
+  const tithePts = monthlyData.map((d, i) => ({ x: vx(i, len), y: vy(d.tithe,     Y_MAX) }));
+  const offerPts = monthlyData.map((d, i) => ({ x: vx(i, len), y: vy(d.offerings, Y_MAX) }));
+
+  const titheSmoothLine = smoothPath(tithePts);
+  const offerSmoothLine = smoothPath(offerPts);
+  const titheAreaPath   = titheSmoothLine + ` L${tithePts[lastIdx].x.toFixed(2)},${bottomY} L${tithePts[0].x.toFixed(2)},${bottomY} Z`;
+  const offerAreaPath   = offerSmoothLine + ` L${offerPts[lastIdx].x.toFixed(2)},${bottomY} L${offerPts[0].x.toFixed(2)},${bottomY} Z`;
+
+  const last        = monthlyData[lastIdx];
+  const prev        = monthlyData[lastIdx - 1];
+  const lastTotal   = last.tithe + last.offerings;
+  const prevTotal   = prev.tithe + prev.offerings;
+  const growth      = prevTotal > 0 ? (((lastTotal - prevTotal) / prevTotal) * 100).toFixed(1) : "0.0";
+  const growthPos   = parseFloat(growth) >= 0;
+
   const lastTithePt = tithePts[lastIdx];
   const lastOfferPt = offerPts[lastIdx];
 
+  // ── Hover state ───────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hovIdx, setHovIdx] = useState<number | null>(null);
-  const [tooltipX, setTooltipX] = useState(0);
+  const [hovIdx,    setHovIdx]    = useState<number | null>(null);
+  const [tooltipX,  setTooltipX]  = useState(0);
 
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const relX = e.clientX - rect.left;
-    const svgX  = (relX / rect.width) * VW;
-    let closest = 0;
-    let minD    = Infinity;
+    const svgX = (relX / rect.width) * VW;
+    let closest = 0, minD = Infinity;
     monthlyData.forEach((_, i) => {
-      const d = Math.abs(vx(i) - svgX);
+      const d = Math.abs(vx(i, len) - svgX);
       if (d < minD) { minD = d; closest = i; }
     });
     setHovIdx(closest);
     setTooltipX(relX);
   }
 
-  function handleMouseLeave() {
-    setHovIdx(null);
-  }
-
   const containerWidth = containerRef.current?.clientWidth ?? 600;
   const TOOLTIP_W = 138;
-  const tooltipLeft =
-    tooltipX > containerWidth / 2
-      ? tooltipX - TOOLTIP_W - 12
-      : tooltipX + 12;
+  const tooltipLeft = tooltipX > containerWidth / 2 ? tooltipX - TOOLTIP_W - 12 : tooltipX + 12;
 
   return (
     <div className="bg-[#1C1828] border border-[#2E2840] rounded-2xl overflow-hidden">
-      {/* ── Header ─────────────────────────────────────────────────────── */}
+      {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between px-5 py-4 border-b border-[#2E2840]/60">
         <div>
           <h2 className="text-sm font-semibold text-white">Income Trend</h2>
           <p className="text-xs mt-1">
-            <span className="font-semibold text-emerald-400">↑ {growth}%</span>
+            <span className={growthPos ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
+              {growthPos ? "↑" : "↓"} {Math.abs(parseFloat(growth))}%
+            </span>
             <span className="text-[#6B6880] ml-1">vs last month</span>
           </p>
           <p className="text-[11px] text-[#8B879C] mt-0.5">
@@ -125,43 +149,33 @@ export function IncomeChart() {
           </p>
         </div>
 
-        {/* Legend */}
         <div className="flex items-start gap-6 text-right pt-0.5">
           <div>
             <p className="text-[10px] text-[#8B879C] flex items-center justify-end gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shrink-0" />
-              Tithe · Apr
+              Tithe · {last.month}
             </p>
-            <p className="text-sm font-bold text-white mt-0.5">
-              GH₵{last.tithe.toLocaleString()}
-            </p>
+            <p className="text-sm font-bold text-white mt-0.5">GH₵{last.tithe.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-[10px] text-[#8B879C] flex items-center justify-end gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shrink-0" />
-              Offerings · Apr
+              Offerings · {last.month}
             </p>
-            <p className="text-sm font-bold text-white mt-0.5">
-              GH₵{last.offerings.toLocaleString()}
-            </p>
+            <p className="text-sm font-bold text-white mt-0.5">GH₵{last.offerings.toLocaleString()}</p>
           </div>
         </div>
       </div>
 
-      {/* ── SVG Chart ──────────────────────────────────────────────────── */}
+      {/* ── SVG Chart ────────────────────────────────────────────────── */}
       <div
         ref={containerRef}
         className="w-full relative cursor-crosshair"
         style={{ height: 196 }}
         onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onMouseLeave={() => setHovIdx(null)}
       >
-        <svg
-          viewBox={`0 0 ${VW} ${VH}`}
-          width="100%"
-          height="100%"
-          preserveAspectRatio="none"
-        >
+        <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height="100%" preserveAspectRatio="none">
           <defs>
             <linearGradient id="icTitheArea" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%"   stopColor="#FBBF24" stopOpacity="0.14" />
@@ -184,110 +198,60 @@ export function IncomeChart() {
             </linearGradient>
           </defs>
 
-          {/* Y-axis grid lines + labels — higher contrast */}
           {GRID_VALS.map((v) => {
-            const y = vy(v);
+            const y = vy(v, Y_MAX);
             return (
               <g key={v}>
-                <line
-                  x1={PAD.l} y1={y} x2={VW - PAD.r} y2={y}
-                  stroke="#3A3658" strokeWidth={1} strokeDasharray="3,5"
-                />
-                <text
-                  x={PAD.l - 7} y={y + 3.5}
-                  textAnchor="end" fontSize={7.5} fill="#9490A8"
-                  fontFamily="JetBrains Mono, monospace"
-                >
+                <line x1={PAD.l} y1={y} x2={VW - PAD.r} y2={y}
+                  stroke="#3A3658" strokeWidth={1} strokeDasharray="3,5" />
+                <text x={PAD.l - 7} y={y + 3.5} textAnchor="end" fontSize={7.5} fill="#9490A8"
+                  fontFamily="JetBrains Mono, monospace">
                   {v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
                 </text>
               </g>
             );
           })}
 
-          {/* X-axis bottom line */}
-          <line
-            x1={PAD.l} y1={bottomY} x2={VW - PAD.r} y2={bottomY}
-            stroke="#2E2840" strokeWidth={0.6}
-          />
+          <line x1={PAD.l} y1={bottomY} x2={VW - PAD.r} y2={bottomY} stroke="#2E2840" strokeWidth={0.6} />
 
-          {/* X-axis month labels — higher contrast */}
-          {monthlyData.map((d, i) => {
-            const isLast = i === lastIdx;
-            return (
-              <text
-                key={d.month}
-                x={vx(i)} y={VH - 7}
-                textAnchor="middle"
-                fontSize={8}
-                fill={isLast ? "#FBBF24" : "#9490A8"}
-                fontWeight={isLast ? "700" : "500"}
-              >
-                {d.month}
-              </text>
-            );
-          })}
+          {monthlyData.map((d, i) => (
+            <text key={d.month + i} x={vx(i, len)} y={VH - 7} textAnchor="middle"
+              fontSize={8} fill={d.isLast ? "#FBBF24" : "#9490A8"} fontWeight={d.isLast ? "700" : "500"}>
+              {d.month}
+            </text>
+          ))}
 
-          {/* Area fills */}
           <path d={titheAreaPath} fill="url(#icTitheArea)" />
           <path d={offerAreaPath} fill="url(#icOfferArea)" />
+          <path d={titheSmoothLine} fill="none" stroke="url(#icTitheLine)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          <path d={offerSmoothLine} fill="none" stroke="url(#icOfferLine)" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
 
-          {/* Tithe line — thicker */}
-          <path
-            d={titheSmoothLine}
-            fill="none"
-            stroke="url(#icTitheLine)"
-            strokeWidth={2.5}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-
-          {/* Offerings line — thicker */}
-          <path
-            d={offerSmoothLine}
-            fill="none"
-            stroke="url(#icOfferLine)"
-            strokeWidth={2.2}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-
-          {/* Past data dots */}
           {tithePts.slice(0, -1).map((p, i) => (
             <circle key={`t${i}`} cx={p.x} cy={p.y} r={2.5}
-              fill="#1C1828" stroke="#FBBF24" strokeWidth={1.4} strokeOpacity={0.5}
-            />
+              fill="#1C1828" stroke="#FBBF24" strokeWidth={1.4} strokeOpacity={0.5} />
           ))}
           {offerPts.slice(0, -1).map((p, i) => (
             <circle key={`o${i}`} cx={p.x} cy={p.y} r={2.5}
-              fill="#1C1828" stroke="#34D399" strokeWidth={1.4} strokeOpacity={0.45}
-            />
+              fill="#1C1828" stroke="#34D399" strokeWidth={1.4} strokeOpacity={0.45} />
           ))}
 
-          {/* Current month endpoint — pulse rings */}
-          <circle cx={lastTithePt.x} cy={lastTithePt.y} r={11} fill="#FBBF24" fillOpacity={0.06} />
+          <circle cx={lastTithePt.x} cy={lastTithePt.y} r={11}  fill="#FBBF24" fillOpacity={0.06} />
           <circle cx={lastTithePt.x} cy={lastTithePt.y} r={5.5} fill="#FBBF24" fillOpacity={0.20} />
           <circle cx={lastTithePt.x} cy={lastTithePt.y} r={3.2} fill="#FBBF24" />
-
           <circle cx={lastOfferPt.x} cy={lastOfferPt.y} r={10}  fill="#34D399" fillOpacity={0.06} />
           <circle cx={lastOfferPt.x} cy={lastOfferPt.y} r={5}   fill="#34D399" fillOpacity={0.20} />
           <circle cx={lastOfferPt.x} cy={lastOfferPt.y} r={3}   fill="#34D399" />
 
-          {/* ── Hover crosshair ─────────────────────────────────────── */}
           {hovIdx !== null && (() => {
-            const hx = vx(hovIdx);
-            const ty = vy(monthlyData[hovIdx].tithe);
-            const oy = vy(monthlyData[hovIdx].offerings);
+            const hx = vx(hovIdx, len);
+            const ty = vy(monthlyData[hovIdx].tithe,     Y_MAX);
+            const oy = vy(monthlyData[hovIdx].offerings, Y_MAX);
             return (
               <g>
-                {/* Vertical guide line */}
-                <line
-                  x1={hx} y1={PAD.t} x2={hx} y2={bottomY}
-                  stroke="#3E3858" strokeWidth={1.2} strokeDasharray="3,4"
-                />
-                {/* Tithe dot */}
+                <line x1={hx} y1={PAD.t} x2={hx} y2={bottomY}
+                  stroke="#3E3858" strokeWidth={1.2} strokeDasharray="3,4" />
                 <circle cx={hx} cy={ty} r={5}   fill="#1C1828" stroke="#FBBF24" strokeWidth={2} />
                 <circle cx={hx} cy={ty} r={2.5} fill="#FBBF24" />
-                {/* Offerings dot */}
                 <circle cx={hx} cy={oy} r={5}   fill="#1C1828" stroke="#34D399" strokeWidth={2} />
                 <circle cx={hx} cy={oy} r={2.5} fill="#34D399" />
               </g>
@@ -295,15 +259,11 @@ export function IncomeChart() {
           })()}
         </svg>
 
-        {/* ── HTML Tooltip overlay ──────────────────────────────────── */}
         {hovIdx !== null && (
-          <div
-            className="absolute top-3 pointer-events-none z-20"
-            style={{ left: tooltipLeft, width: TOOLTIP_W }}
-          >
+          <div className="absolute top-3 pointer-events-none z-20" style={{ left: tooltipLeft, width: TOOLTIP_W }}>
             <div className="bg-[#1E1B2C] border border-[#3E3858] rounded-xl px-3.5 py-3 shadow-2xl shadow-black/50">
               <p className="text-[10px] font-bold text-[#8B879C] uppercase tracking-[0.1em] mb-2.5">
-                {monthlyData[hovIdx].month} 2026
+                {monthlyData[hovIdx].month} {monthlyData[hovIdx].year}
               </p>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 justify-between">
