@@ -15,36 +15,101 @@ fn stamp() -> String {
     format!("{}{:02}{:02}", n.year(), n.month(), n.day())
 }
 
+// ── Light, Excel-friendly colour theme ────────────────────────────────────────
+//
+// All cells have explicit background + font colour so spreadsheet apps never
+// produce invisible text (e.g. black text on a dark row).
+//
+//  Header   – Navy  #1E4D6B  |  White text  #FFFFFF  |  Bold
+//  Even row – White #FFFFFF  |  Dark  text  #1A1A2E
+//  Odd  row – Ice   #EEF4FF  |  Dark  text  #1A1A2E
+//  Total    – Amber #FFF3CD  |  Amber text  #7A4F00  |  Bold
+//  20% col  – Warm  #FEF9EC  |  Dark  text  #1A1A2E  (even)
+//           - Warm  #FDF3D0  |  Dark  text  #1A1A2E  (odd)
+//  60% col  – Mint  #EFF9F0  |  Dark  text  #1A1A2E  (even)
+//           - Mint  #D8F3DC  |  Dark  text  #1A1A2E  (odd)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DARK:          u32 = 0x1A1A2E;  // universal dark text
+const WHITE_BG:      u32 = 0xFFFFFF;
+const ICE_BG:        u32 = 0xEEF4FF;  // odd-row tint
+const NAVY_BG:       u32 = 0x1E4D6B;  // header
+const AMBER_BG:      u32 = 0xFFF3CD;  // totals bg
+const AMBER_TXT:     u32 = 0x7A4F00;  // totals text
+const WARM_BG:       u32 = 0xFEF9EC;  // 20% even
+const WARM_ALT_BG:   u32 = 0xFDF3D0;  // 20% odd
+const MINT_BG:       u32 = 0xEFF9F0;  // 60% even
+const MINT_ALT_BG:   u32 = 0xD8F3DC;  // 60% odd
+
 fn header_fmt() -> Format {
     Format::new()
         .set_bold()
-        .set_background_color(Color::RGB(0x1C1828))
-        .set_font_color(Color::RGB(0xC9A84C))
+        .set_background_color(Color::RGB(NAVY_BG))
+        .set_font_color(Color::RGB(0xFFFFFF))
 }
 
-fn currency_fmt() -> Format {
-    Format::new().set_num_format("\"GHS \"#,##0.00")
+// Even row — text cell
+fn row_fmt() -> Format {
+    Format::new()
+        .set_background_color(Color::RGB(WHITE_BG))
+        .set_font_color(Color::RGB(DARK))
 }
 
+// Odd row — text cell
 fn alt_fmt() -> Format {
-    Format::new().set_background_color(Color::RGB(0x211D30))
+    Format::new()
+        .set_background_color(Color::RGB(ICE_BG))
+        .set_font_color(Color::RGB(DARK))
 }
 
+// Even row — currency cell
+fn currency_fmt() -> Format {
+    Format::new()
+        .set_background_color(Color::RGB(WHITE_BG))
+        .set_font_color(Color::RGB(DARK))
+        .set_num_format("\"GHS \"#,##0.00")
+}
+
+// Odd row — currency cell
 fn alt_currency_fmt() -> Format {
     Format::new()
-        .set_background_color(Color::RGB(0x211D30))
+        .set_background_color(Color::RGB(ICE_BG))
+        .set_font_color(Color::RGB(DARK))
         .set_num_format("\"GHS \"#,##0.00")
 }
 
-fn bold_fmt() -> Format {
-    Format::new().set_bold()
-}
-
-fn bold_currency_fmt() -> Format {
+// Totals row — label
+fn totals_label_fmt() -> Format {
     Format::new()
         .set_bold()
+        .set_background_color(Color::RGB(AMBER_BG))
+        .set_font_color(Color::RGB(AMBER_TXT))
+}
+
+// Totals row — currency
+fn totals_currency_fmt() -> Format {
+    Format::new()
+        .set_bold()
+        .set_background_color(Color::RGB(AMBER_BG))
+        .set_font_color(Color::RGB(AMBER_TXT))
         .set_num_format("\"GHS \"#,##0.00")
 }
+
+// Tithe breakdown — 20% columns (even / odd rows)
+fn t20_fmt()     -> Format { Format::new().set_background_color(Color::RGB(WARM_BG))     .set_font_color(Color::RGB(DARK)).set_num_format("\"GHS \"#,##0.00") }
+fn t20_alt_fmt() -> Format { Format::new().set_background_color(Color::RGB(WARM_ALT_BG)) .set_font_color(Color::RGB(DARK)).set_num_format("\"GHS \"#,##0.00") }
+
+// Tithe breakdown — 60% column (even / odd rows)
+fn t60_fmt()     -> Format { Format::new().set_background_color(Color::RGB(MINT_BG))     .set_font_color(Color::RGB(DARK)).set_num_format("\"GHS \"#,##0.00") }
+fn t60_alt_fmt() -> Format { Format::new().set_background_color(Color::RGB(MINT_ALT_BG)) .set_font_color(Color::RGB(DARK)).set_num_format("\"GHS \"#,##0.00") }
+
+// Totals for 20% / 60% columns
+fn totals_t20_fmt() -> Format { Format::new().set_bold().set_background_color(Color::RGB(0xFBD95B)).set_font_color(Color::RGB(AMBER_TXT)).set_num_format("\"GHS \"#,##0.00") }
+fn totals_t60_fmt() -> Format { Format::new().set_bold().set_background_color(Color::RGB(0xA3E4A8)).set_font_color(Color::RGB(0x1A4D1E)) .set_num_format("\"GHS \"#,##0.00") }
+
+// Keep old bold_fmt / bold_currency_fmt aliases so we don't break anything
+fn bold_fmt()          -> Format { totals_label_fmt()    }
+fn bold_currency_fmt() -> Format { totals_currency_fmt() }
 
 fn write_headers(ws: &mut Worksheet, headers: &[&str]) -> Result<(), AppError> {
     let hf = header_fmt();
@@ -113,11 +178,13 @@ pub async fn export_members_excel() -> Result<String, AppError> {
         }
     }
 
+    let rf  = row_fmt();
     let alt = alt_fmt();
 
     for (i, row) in rows.iter().enumerate() {
         let r   = (i + 1) as u32;
         let odd = i % 2 == 1;
+        let fmt = if odd { &alt } else { &rf };
 
         let cells: &[&str] = &[
             &row.member_no,
@@ -132,11 +199,7 @@ pub async fn export_members_excel() -> Result<String, AppError> {
         ];
 
         for (c, val) in cells.iter().enumerate() {
-            if odd {
-                ws.write_with_format(r, c as u16, *val, &alt).ok();
-            } else {
-                ws.write(r, c as u16, *val).ok();
-            }
+            ws.write_with_format(r, c as u16, *val, fmt).ok();
         }
     }
 
@@ -187,11 +250,17 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
         "20% Portion (GHS)", "60% Portion (GHS)", "20% Balance (GHS)",
     ])?;
 
-    let cf  = currency_fmt();
-    let alt = alt_fmt();
-    let acf = alt_currency_fmt();
-    let bf  = bold_fmt();
-    let bcf = bold_currency_fmt();
+    let rf   = row_fmt();
+    let cf   = currency_fmt();
+    let alt  = alt_fmt();
+    let acf  = alt_currency_fmt();
+    let tlf  = totals_label_fmt();
+    let tcf  = totals_currency_fmt();
+    // Breakdown column formats
+    let t20  = t20_fmt();     let t20a = t20_alt_fmt();
+    let t60  = t60_fmt();     let t60a = t60_alt_fmt();
+    let tt20 = totals_t20_fmt();
+    let tt60 = totals_t60_fmt();
 
     let month_names = [
         "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -204,42 +273,31 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
     let mut total_part_c = 0.0_f64; // 20% balance
 
     for (i, row) in rows.iter().enumerate() {
-        let r        = (i + 1) as u32;
-        let odd      = i % 2 == 1;
-        let name     = format!("{} {}", row.first_name, row.last_name);
-        let month    = month_names
-            .get(row.period_month as usize)
-            .copied()
-            .unwrap_or("?");
-        let part_a   = row.amount * 0.20;
-        let part_b   = row.amount * 0.60;
-        let part_c   = row.amount * 0.20; // remaining 20%
+        let r      = (i + 1) as u32;
+        let odd    = i % 2 == 1;
+        let name   = format!("{} {}", row.first_name, row.last_name);
+        let month  = month_names.get(row.period_month as usize).copied().unwrap_or("?");
+        let part_a = row.amount * 0.20;
+        let part_b = row.amount * 0.60;
+        let part_c = row.amount * 0.20;
 
-        if odd {
-            ws.write_with_format(r, 0, &name,                                      &alt).ok();
-            ws.write_with_format(r, 1, &row.member_no,                             &alt).ok();
-            ws.write_with_format(r, 2, row.amount,                                 &acf).ok();
-            ws.write_with_format(r, 3, &row.payment_date,                          &alt).ok();
-            ws.write_with_format(r, 4, month,                                      &alt).ok();
-            ws.write_with_format(r, 5, &row.payment_mode,                          &alt).ok();
-            ws.write_with_format(r, 6, row.reference_no.as_deref().unwrap_or("—"), &alt).ok();
-            ws.write_with_format(r, 7, &row.received_by,                           &alt).ok();
-            ws.write_with_format(r, 8,  part_a,                                    &acf).ok();
-            ws.write_with_format(r, 9,  part_b,                                    &acf).ok();
-            ws.write_with_format(r, 10, part_c,                                    &acf).ok();
+        let (tf, cf_r, bf20, bf60) = if odd {
+            (&alt, &acf, &t20a, &t60a)
         } else {
-            ws.write(r, 0, &name).ok();
-            ws.write(r, 1, &row.member_no).ok();
-            ws.write_with_format(r, 2, row.amount, &cf).ok();
-            ws.write(r, 3, &row.payment_date).ok();
-            ws.write(r, 4, month).ok();
-            ws.write(r, 5, &row.payment_mode).ok();
-            ws.write(r, 6, row.reference_no.as_deref().unwrap_or("—")).ok();
-            ws.write(r, 7, &row.received_by).ok();
-            ws.write_with_format(r, 8,  part_a, &cf).ok();
-            ws.write_with_format(r, 9,  part_b, &cf).ok();
-            ws.write_with_format(r, 10, part_c, &cf).ok();
-        }
+            (&rf,  &cf,  &t20,  &t60)
+        };
+
+        ws.write_with_format(r, 0, &name,                                      tf).ok();
+        ws.write_with_format(r, 1, &row.member_no,                             tf).ok();
+        ws.write_with_format(r, 2, row.amount,                                 cf_r).ok();
+        ws.write_with_format(r, 3, &row.payment_date,                          tf).ok();
+        ws.write_with_format(r, 4, month,                                      tf).ok();
+        ws.write_with_format(r, 5, &row.payment_mode,                          tf).ok();
+        ws.write_with_format(r, 6, row.reference_no.as_deref().unwrap_or("—"), tf).ok();
+        ws.write_with_format(r, 7, &row.received_by,                           tf).ok();
+        ws.write_with_format(r, 8,  part_a,                                    bf20).ok();
+        ws.write_with_format(r, 9,  part_b,                                    bf60).ok();
+        ws.write_with_format(r, 10, part_c,                                    bf20).ok();
 
         total        += row.amount;
         total_part_a += part_a;
@@ -247,13 +305,13 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
         total_part_c += part_c;
     }
 
-    // Totals row
+    // Totals row — amber for main amount, warm/mint tints for 20/60 columns
     let tr = (rows.len() + 1) as u32;
-    ws.write_with_format(tr, 1,  "TOTAL",       &bf).ok();
-    ws.write_with_format(tr, 2,  total,          &bcf).ok();
-    ws.write_with_format(tr, 8,  total_part_a,   &bcf).ok();
-    ws.write_with_format(tr, 9,  total_part_b,   &bcf).ok();
-    ws.write_with_format(tr, 10, total_part_c,   &bcf).ok();
+    ws.write_with_format(tr, 1,  "TOTAL",       &tlf).ok();
+    ws.write_with_format(tr, 2,  total,          &tcf).ok();
+    ws.write_with_format(tr, 8,  total_part_a,   &tt20).ok();
+    ws.write_with_format(tr, 9,  total_part_b,   &tt60).ok();
+    ws.write_with_format(tr, 10, total_part_c,   &tt20).ok();
 
     ws.autofit();
     save(&mut wb, &format!("tithe_{}.xlsx", year))
@@ -296,6 +354,7 @@ pub async fn export_offerings_excel(year: i64) -> Result<String, AppError> {
         "Amount (GHS)", "Currency", "Counted By",
     ])?;
 
+    let rf  = row_fmt();
     let cf  = currency_fmt();
     let alt = alt_fmt();
     let acf = alt_currency_fmt();
@@ -307,22 +366,14 @@ pub async fn export_offerings_excel(year: i64) -> Result<String, AppError> {
     for (i, row) in rows.iter().enumerate() {
         let r   = (i + 1) as u32;
         let odd = i % 2 == 1;
+        let (tf, cf_r) = if odd { (&alt, &acf) } else { (&rf, &cf) };
 
-        if odd {
-            ws.write_with_format(r, 0, &row.service_date,                         &alt).ok();
-            ws.write_with_format(r, 1, &row.service_type,                         &alt).ok();
-            ws.write_with_format(r, 2, &row.category,                             &alt).ok();
-            ws.write_with_format(r, 3, row.total_amount,                          &acf).ok();
-            ws.write_with_format(r, 4, &row.currency,                             &alt).ok();
-            ws.write_with_format(r, 5, row.counted_by.as_deref().unwrap_or("—"), &alt).ok();
-        } else {
-            ws.write(r, 0, &row.service_date).ok();
-            ws.write(r, 1, &row.service_type).ok();
-            ws.write(r, 2, &row.category).ok();
-            ws.write_with_format(r, 3, row.total_amount, &cf).ok();
-            ws.write(r, 4, &row.currency).ok();
-            ws.write(r, 5, row.counted_by.as_deref().unwrap_or("—")).ok();
-        }
+        ws.write_with_format(r, 0, &row.service_date,                        tf).ok();
+        ws.write_with_format(r, 1, &row.service_type,                        tf).ok();
+        ws.write_with_format(r, 2, &row.category,                            tf).ok();
+        ws.write_with_format(r, 3, row.total_amount,                         cf_r).ok();
+        ws.write_with_format(r, 4, &row.currency,                            tf).ok();
+        ws.write_with_format(r, 5, row.counted_by.as_deref().unwrap_or("—"), tf).ok();
 
         total += row.total_amount;
     }
@@ -376,6 +427,7 @@ pub async fn export_welfare_excel(year: i64) -> Result<String, AppError> {
         "Payment Mode", "Reference", "Received By",
     ])?;
 
+    let rf  = row_fmt();
     let cf  = currency_fmt();
     let alt = alt_fmt();
     let acf = alt_currency_fmt();
@@ -388,24 +440,15 @@ pub async fn export_welfare_excel(year: i64) -> Result<String, AppError> {
         let r    = (i + 1) as u32;
         let odd  = i % 2 == 1;
         let name = format!("{} {}", row.first_name, row.last_name);
+        let (tf, cf_r) = if odd { (&alt, &acf) } else { (&rf, &cf) };
 
-        if odd {
-            ws.write_with_format(r, 0, &name,                                     &alt).ok();
-            ws.write_with_format(r, 1, &row.member_no,                            &alt).ok();
-            ws.write_with_format(r, 2, row.amount,                                &acf).ok();
-            ws.write_with_format(r, 3, &row.contribution_date,                    &alt).ok();
-            ws.write_with_format(r, 4, &row.payment_mode,                         &alt).ok();
-            ws.write_with_format(r, 5, row.reference_no.as_deref().unwrap_or("—"), &alt).ok();
-            ws.write_with_format(r, 6, &row.received_by,                          &alt).ok();
-        } else {
-            ws.write(r, 0, &name).ok();
-            ws.write(r, 1, &row.member_no).ok();
-            ws.write_with_format(r, 2, row.amount, &cf).ok();
-            ws.write(r, 3, &row.contribution_date).ok();
-            ws.write(r, 4, &row.payment_mode).ok();
-            ws.write(r, 5, row.reference_no.as_deref().unwrap_or("—")).ok();
-            ws.write(r, 6, &row.received_by).ok();
-        }
+        ws.write_with_format(r, 0, &name,                                      tf).ok();
+        ws.write_with_format(r, 1, &row.member_no,                             tf).ok();
+        ws.write_with_format(r, 2, row.amount,                                 cf_r).ok();
+        ws.write_with_format(r, 3, &row.contribution_date,                     tf).ok();
+        ws.write_with_format(r, 4, &row.payment_mode,                          tf).ok();
+        ws.write_with_format(r, 5, row.reference_no.as_deref().unwrap_or("—"), tf).ok();
+        ws.write_with_format(r, 6, &row.received_by,                           tf).ok();
 
         total += row.amount;
     }
@@ -466,15 +509,21 @@ pub async fn get_export_summary(year: i64) -> Result<ExportSummary, crate::model
     .await?;
 
     let welfare_contrib: (f64,) = sqlx::query_as(
-        "SELECT COALESCE(SUM(amount), 0.0) FROM welfare_contributions",
+        "SELECT COALESCE(SUM(amount), 0.0)
+         FROM welfare_contributions
+         WHERE strftime('%Y', contribution_date) = ?",
     )
+    .bind(year.to_string())
     .fetch_one(pool)
     .await?;
 
     let welfare_disbursed: (f64,) = sqlx::query_as(
         "SELECT COALESCE(SUM(amount), 0.0)
-         FROM welfare_disbursements WHERE status = 'approved'",
+         FROM welfare_disbursements
+         WHERE status = 'approved'
+           AND strftime('%Y', disbursement_date) = ?",
     )
+    .bind(year.to_string())
     .fetch_one(pool)
     .await?;
 
