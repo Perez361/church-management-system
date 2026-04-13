@@ -29,11 +29,14 @@ function formatNotifTime(iso: string) {
 }
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
-  const { syncStatus, notifications, markAllRead, dismissNotification } = useAppStore();
+  const { syncStatus, notifications, markAllRead, dismissNotification, loadNotifications, clearAllNotifications } = useAppStore();
   const [bellOpen, setBellOpen]   = useState(false);
   const [search,   setSearch]     = useState("");
   const bellRef                   = useRef<HTMLDivElement>(null);
   const navigate                  = useNavigate();
+
+  // Load persisted notifications once on mount
+  useEffect(() => { loadNotifications(); }, [loadNotifications]);
 
   const unread = notifications.filter((n) => !n.read).length;
 
@@ -174,9 +177,7 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
               {notifications.length > 0 && (
                 <div className="px-4 py-2.5 border-t border-[#2E2840]">
                   <button
-                    onClick={() => {
-                      notifications.forEach((n) => dismissNotification(n.id));
-                    }}
+                    onClick={clearAllNotifications}
                     className="text-[10px] text-[#9490A8] hover:text-rose-400 transition-colors"
                   >
                     Clear all

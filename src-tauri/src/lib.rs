@@ -8,6 +8,11 @@ pub mod commands {
     pub mod welfare;
     pub mod dashboard;
     pub mod export;
+    pub mod settings;
+    pub mod departments;
+    pub mod events;
+    pub mod notifications;
+    pub mod backup;
 }
 
 use commands::{
@@ -17,6 +22,11 @@ use commands::{
     welfare::*,
     dashboard::*,
     export::*,
+    settings::*,
+    departments::*,
+    events::*,
+    notifications::*,
+    backup::*,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -72,18 +82,40 @@ pub fn run() {
             create_welfare_contribution,
             get_welfare_disbursements,
             create_welfare_disbursement,
+            update_disbursement_status,
             get_welfare_balance,
             // Dashboard
             get_dashboard_stats,
             get_sync_pending_count,
             trigger_sync,
             get_sync_stats,
+            get_sync_queue_items,
             // Export
             export_members_excel,
             export_tithe_excel,
             export_offerings_excel,
             export_welfare_excel,
             get_export_summary,
+            // Settings
+            get_app_settings,
+            save_app_settings,
+            // Departments
+            get_departments,
+            create_department,
+            update_department,
+            delete_department,
+            // Member lifecycle events
+            get_member_events,
+            create_member_event,
+            delete_member_event,
+            // Notifications persistence
+            get_notifications,
+            save_notification,
+            mark_notifications_read,
+            clear_notifications,
+            // Backup / restore
+            backup_database,
+            restore_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

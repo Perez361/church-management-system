@@ -202,6 +202,9 @@ export const tauriGetWelfareDisbursements = () =>
 export const tauriCreateWelfareDisbursement = (input: CreateDisbursementInput) =>
   invoke<WelfareDisbursement>("create_welfare_disbursement", { input });
 
+export const tauriUpdateDisbursementStatus = (id: string, status: "approved" | "rejected") =>
+  invoke<WelfareDisbursement>("update_disbursement_status", { id, status });
+
 // ── Dashboard commands ──────────────────────────────────────────────────────
 
 export const tauriGetDashboardStats = () =>
@@ -221,6 +224,18 @@ export interface SyncStats {
 
 export const tauriTriggerSync  = () => invoke<string>("trigger_sync");
 export const tauriGetSyncStats = () => invoke<SyncStats>("get_sync_stats");
+
+export interface SyncQueueItem {
+  id:          number;
+  table_name:  string;
+  record_id:   string;
+  operation:   string;
+  status:      string;
+  retry_count: number;
+  created_at:  string;
+}
+
+export const tauriGetSyncQueueItems = () => invoke<SyncQueueItem[]>("get_sync_queue_items");
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 
@@ -251,4 +266,86 @@ export interface ExportSummary {
 
 export const tauriGetExportSummary = (year: number) =>
   invoke<ExportSummary>("get_export_summary", { year });
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export interface AppSettings {
+  currency:          string;
+  date_format:       string;
+  language:          string;
+  notifications:     boolean;
+  auto_sync:         boolean;
+  show_sync_badge:   boolean;
+  weekly_summary:    boolean;
+  church_name:       string;
+  supabase_url:      string;
+  supabase_anon_key: string;
+}
+
+export const tauriGetAppSettings  = () => invoke<AppSettings>("get_app_settings");
+export const tauriSaveAppSettings = (settings: AppSettings) => invoke<void>("save_app_settings", { settings });
+
+// ── Departments ───────────────────────────────────────────────────────────────
+
+export interface Department {
+  id:          string;
+  name:        string;
+  description?: string;
+  leader_id?:  string;
+  created_at:  string;
+}
+
+export interface CreateDepartmentInput {
+  name:        string;
+  description?: string;
+  leader_id?:  string;
+}
+
+export const tauriGetDepartments    = ()                                         => invoke<Department[]>("get_departments");
+export const tauriCreateDepartment  = (input: CreateDepartmentInput)             => invoke<Department>("create_department", { input });
+export const tauriUpdateDepartment  = (id: string, input: CreateDepartmentInput) => invoke<Department>("update_department", { id, input });
+export const tauriDeleteDepartment  = (id: string)                               => invoke<boolean>("delete_department", { id });
+
+// ── Member lifecycle events ───────────────────────────────────────────────────
+
+export interface MemberEvent {
+  id:         string;
+  member_id:  string;
+  event_type: string;
+  event_date: string;
+  notes?:     string;
+  created_at: string;
+}
+
+export interface CreateMemberEventInput {
+  member_id:  string;
+  event_type: string;
+  event_date: string;
+  notes?:     string;
+}
+
+export const tauriGetMemberEvents    = (memberId: string)                   => invoke<MemberEvent[]>("get_member_events", { memberId: memberId });
+export const tauriCreateMemberEvent  = (input: CreateMemberEventInput)      => invoke<MemberEvent>("create_member_event", { input });
+export const tauriDeleteMemberEvent  = (id: string)                         => invoke<boolean>("delete_member_event", { id });
+
+// ── Notifications persistence ─────────────────────────────────────────────────
+
+export interface DbNotification {
+  id:         number;
+  title:      string;
+  message:    string;
+  kind:       string;
+  read:       boolean;
+  created_at: string;
+}
+
+export const tauriGetNotifications       = ()                                              => invoke<DbNotification[]>("get_notifications");
+export const tauriSaveNotification       = (title: string, message: string, kind: string) => invoke<DbNotification>("save_notification", { input: { title, message, kind } });
+export const tauriMarkNotificationsRead  = ()                                              => invoke<void>("mark_notifications_read");
+export const tauriClearNotifications     = ()                                              => invoke<void>("clear_notifications");
+
+// ── Backup / restore ──────────────────────────────────────────────────────────
+
+export const tauriBackupDatabase  = ()                      => invoke<string>("backup_database");
+export const tauriRestoreDatabase = (backupPath: string)    => invoke<string>("restore_database", { backupPath });
 

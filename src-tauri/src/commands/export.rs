@@ -239,81 +239,176 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
     .fetch_all(pool)
     .await?;
 
-    let mut wb = Workbook::new();
-    let ws = wb.add_worksheet();
-    ws.set_name(&format!("Tithe {}", year))
-        .map_err(|e| AppError { message: e.to_string(), code: "EXPORT".into() })?;
+    // Monthly totals for Sheet 2
+    let monthly: Vec<(i64, f64)> = sqlx::query_as::<_, (i64, f64)>(
+        "SELECT period_month, SUM(amount)
+         FROM tithe_payments
+         WHERE period_year = ?
+         GROUP BY period_month
+         ORDER BY period_month",
+    )
+    .bind(year)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
 
-    write_headers(ws, &[
-        "Member", "Member No", "Tithe Amount (GHS)", "Payment Date",
-        "Period Month", "Payment Mode", "Reference", "Received By",
-        "20% Portion (GHS)", "60% Portion (GHS)", "20% Balance (GHS)",
-    ])?;
-
-    let rf   = row_fmt();
-    let cf   = currency_fmt();
-    let alt  = alt_fmt();
-    let acf  = alt_currency_fmt();
-    let tlf  = totals_label_fmt();
-    let tcf  = totals_currency_fmt();
-    // Breakdown column formats
-    let t20  = t20_fmt();     let t20a = t20_alt_fmt();
-    let t60  = t60_fmt();     let t60a = t60_alt_fmt();
-    let tt20 = totals_t20_fmt();
-    let tt60 = totals_t60_fmt();
-
-    let month_names = [
-        "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-
-    let mut total        = 0.0_f64;
-    let mut total_part_a = 0.0_f64; // 20%
-    let mut total_part_b = 0.0_f64; // 60%
-    let mut total_part_c = 0.0_f64; // 20% balance
-
-    for (i, row) in rows.iter().enumerate() {
-        let r      = (i + 1) as u32;
-        let odd    = i % 2 == 1;
-        let name   = format!("{} {}", row.first_name, row.last_name);
-        let month  = month_names.get(row.period_month as usize).copied().unwrap_or("?");
-        let part_a = row.amount * 0.20;
-        let part_b = row.amount * 0.60;
-        let part_c = row.amount * 0.20;
-
-        let (tf, cf_r, bf20, bf60) = if odd {
-            (&alt, &acf, &t20a, &t60a)
-        } else {
-            (&rf,  &cf,  &t20,  &t60)
-        };
-
-        ws.write_with_format(r, 0, &name,                                      tf).ok();
-        ws.write_with_format(r, 1, &row.member_no,                             tf).ok();
-        ws.write_with_format(r, 2, row.amount,                                 cf_r).ok();
-        ws.write_with_format(r, 3, &row.payment_date,                          tf).ok();
-        ws.write_with_format(r, 4, month,                                      tf).ok();
-        ws.write_with_format(r, 5, &row.payment_mode,                          tf).ok();
-        ws.write_with_format(r, 6, row.reference_no.as_deref().unwrap_or("—"), tf).ok();
-        ws.write_with_format(r, 7, &row.received_by,                           tf).ok();
-        ws.write_with_format(r, 8,  part_a,                                    bf20).ok();
-        ws.write_with_format(r, 9,  part_b,                                    bf60).ok();
-        ws.write_with_format(r, 10, part_c,                                    bf20).ok();
-
-        total        += row.amount;
-        total_part_a += part_a;
-        total_part_b += part_b;
-        total_part_c += part_c;
+    let mut month_totals = [0.0_f64; 13]; // index 1..=12
+    for (m, t) in &monthly {
+        if *m >= 1 && *m <= 12 {
+            month_totals[*m as usize] = *t;
+        }
     }
 
-    // Totals row — amber for main amount, warm/mint tints for 20/60 columns
-    let tr = (rows.len() + 1) as u32;
-    ws.write_with_format(tr, 1,  "TOTAL",       &tlf).ok();
-    ws.write_with_format(tr, 2,  total,          &tcf).ok();
-    ws.write_with_format(tr, 8,  total_part_a,   &tt20).ok();
-    ws.write_with_format(tr, 9,  total_part_b,   &tt60).ok();
-    ws.write_with_format(tr, 10, total_part_c,   &tt20).ok();
+    let mut wb = Workbook::new();
 
-    ws.autofit();
+    // ── Sheet 1: Individual records ───────────────────────────────────────────
+    {
+        let ws = wb.add_worksheet();
+        ws.set_name(&format!("Tithe {}", year))
+            .map_err(|e| AppError { message: e.to_string(), code: "EXPORT".into() })?;
+
+        write_headers(ws, &[
+            "Member", "Member No", "Tithe Amount (GHS)", "Payment Date",
+            "Period Month", "Payment Mode", "Reference", "Received By",
+            "20% Portion (GHS)", "60% Portion (GHS)", "20% Balance (GHS)",
+        ])?;
+
+        let rf   = row_fmt();
+        let cf   = currency_fmt();
+        let alt  = alt_fmt();
+        let acf  = alt_currency_fmt();
+        let tlf  = totals_label_fmt();
+        let tcf  = totals_currency_fmt();
+        let t20  = t20_fmt();     let t20a = t20_alt_fmt();
+        let t60  = t60_fmt();     let t60a = t60_alt_fmt();
+        let tt20 = totals_t20_fmt();
+        let tt60 = totals_t60_fmt();
+
+        let month_names = [
+            "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ];
+
+        let mut total        = 0.0_f64;
+        let mut total_part_a = 0.0_f64;
+        let mut total_part_b = 0.0_f64;
+        let mut total_part_c = 0.0_f64;
+
+        for (i, row) in rows.iter().enumerate() {
+            let r      = (i + 1) as u32;
+            let odd    = i % 2 == 1;
+            let name   = format!("{} {}", row.first_name, row.last_name);
+            let month  = month_names.get(row.period_month as usize).copied().unwrap_or("?");
+            let part_a = row.amount * 0.20;
+            let part_b = row.amount * 0.60;
+            let part_c = row.amount * 0.20;
+
+            let (tf, cf_r, bf20, bf60) = if odd {
+                (&alt, &acf, &t20a, &t60a)
+            } else {
+                (&rf,  &cf,  &t20,  &t60)
+            };
+
+            ws.write_with_format(r, 0, &name,                                      tf).ok();
+            ws.write_with_format(r, 1, &row.member_no,                             tf).ok();
+            ws.write_with_format(r, 2, row.amount,                                 cf_r).ok();
+            ws.write_with_format(r, 3, &row.payment_date,                          tf).ok();
+            ws.write_with_format(r, 4, month,                                      tf).ok();
+            ws.write_with_format(r, 5, &row.payment_mode,                          tf).ok();
+            ws.write_with_format(r, 6, row.reference_no.as_deref().unwrap_or("—"), tf).ok();
+            ws.write_with_format(r, 7, &row.received_by,                           tf).ok();
+            ws.write_with_format(r, 8,  part_a,                                    bf20).ok();
+            ws.write_with_format(r, 9,  part_b,                                    bf60).ok();
+            ws.write_with_format(r, 10, part_c,                                    bf20).ok();
+
+            total        += row.amount;
+            total_part_a += part_a;
+            total_part_b += part_b;
+            total_part_c += part_c;
+        }
+
+        let tr = (rows.len() + 1) as u32;
+        ws.write_with_format(tr, 1,  "TOTAL",       &tlf).ok();
+        ws.write_with_format(tr, 2,  total,          &tcf).ok();
+        ws.write_with_format(tr, 8,  total_part_a,   &tt20).ok();
+        ws.write_with_format(tr, 9,  total_part_b,   &tt60).ok();
+        ws.write_with_format(tr, 10, total_part_c,   &tt20).ok();
+
+        ws.autofit();
+    }
+
+    // ── Sheet 2: Monthly Allocation Summary ───────────────────────────────────
+    {
+        let ws2 = wb.add_worksheet();
+        ws2.set_name(&format!("Allocation {}", year))
+            .map_err(|e| AppError { message: e.to_string(), code: "EXPORT".into() })?;
+
+        let hf2 = header_fmt();
+        let alloc_headers = [
+            "Month", "Total Tithe (GHS)",
+            "20% — Leadership", "60% — Programs", "20% — Reserve",
+        ];
+        for (c, h) in alloc_headers.iter().enumerate() {
+            ws2.write_with_format(0, c as u16, *h, &hf2).ok();
+        }
+
+        let full_months = [
+            "", "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ];
+
+        let rf2  = row_fmt();
+        let cf2  = currency_fmt();
+        let alt2 = alt_fmt();
+        let acf2 = alt_currency_fmt();
+        let t20h = t20_fmt();     let t20ah = t20_alt_fmt();
+        let t60h = t60_fmt();     let t60ah = t60_alt_fmt();
+        let tlf2 = totals_label_fmt();
+        let tcf2 = totals_currency_fmt();
+        let tt20h = totals_t20_fmt();
+        let tt60h = totals_t60_fmt();
+
+        let mut grand_total = 0.0_f64;
+        let mut grand_lead  = 0.0_f64;
+        let mut grand_prog  = 0.0_f64;
+        let mut grand_res   = 0.0_f64;
+
+        for m in 1usize..=12 {
+            let r   = m as u32;
+            let odd = m % 2 == 1;
+            let tot  = month_totals[m];
+            let lead = tot * 0.20;
+            let prog = tot * 0.60;
+            let res  = tot * 0.20;
+
+            let (tf, cf_r, bf20, bf60) = if odd {
+                (&alt2, &acf2, &t20ah, &t60ah)
+            } else {
+                (&rf2, &cf2, &t20h, &t60h)
+            };
+
+            ws2.write_with_format(r, 0, full_months[m], tf).ok();
+            ws2.write_with_format(r, 1, tot,  cf_r).ok();
+            ws2.write_with_format(r, 2, lead, bf20).ok();
+            ws2.write_with_format(r, 3, prog, bf60).ok();
+            ws2.write_with_format(r, 4, res,  bf20).ok();
+
+            grand_total += tot;
+            grand_lead  += lead;
+            grand_prog  += prog;
+            grand_res   += res;
+        }
+
+        let tr2 = 13u32;
+        ws2.write_with_format(tr2, 0, "TOTAL",      &tlf2).ok();
+        ws2.write_with_format(tr2, 1, grand_total,  &tcf2).ok();
+        ws2.write_with_format(tr2, 2, grand_lead,   &tt20h).ok();
+        ws2.write_with_format(tr2, 3, grand_prog,   &tt60h).ok();
+        ws2.write_with_format(tr2, 4, grand_res,    &tt20h).ok();
+
+        ws2.autofit();
+    }
+
     save(&mut wb, &format!("tithe_{}.xlsx", year))
 }
 

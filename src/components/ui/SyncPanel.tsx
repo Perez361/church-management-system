@@ -1,25 +1,26 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw, CheckCircle, AlertCircle,
-  Clock, Wifi, WifiOff,
+  Clock, Wifi, WifiOff, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tauriTriggerSync, tauriGetSyncStats, type SyncStats } from "@/lib/tauri";
+import { tauriTriggerSync, tauriGetSyncStats, tauriGetSyncQueueItems, type SyncStats, type SyncQueueItem } from "@/lib/tauri";
 import { useAppStore } from "@/stores/appStore";
 
 
 export function SyncPanel() {
-  const [stats,   setStats]   = useState<SyncStats | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [msg,     setMsg]     = useState("");
-  const [msgType, setMsgType] = useState<"ok" | "err">("ok");
+  const [stats,        setStats]        = useState<SyncStats | null>(null);
+  const [queueItems,   setQueueItems]   = useState<SyncQueueItem[]>([]);
+  const [showQueue,    setShowQueue]    = useState(false);
+  const [syncing,      setSyncing]      = useState(false);
+  const [msg,          setMsg]          = useState("");
+  const [msgType,      setMsgType]      = useState<"ok" | "err">("ok");
   const { setSyncStatus, syncStatus, addNotification } = useAppStore();
 
   const loadStats = useCallback(async () => {
     try {
       const s = await tauriGetSyncStats();
       setStats(s);
-      // Keep the sidebar sync indicator in sync
       setSyncStatus({
         ...syncStatus,
         pending:   s.pending,
@@ -30,12 +31,20 @@ export function SyncPanel() {
     }
   }, []);
 
+  const loadQueue = useCallback(async () => {
+    try {
+      const items = await tauriGetSyncQueueItems();
+      setQueueItems(items);
+    } catch { /* ignore */ }
+  }, []);
+
   // Load on mount, then every 15 seconds
   useEffect(() => {
     loadStats();
-    const timer = setInterval(loadStats, 15_000);
+    loadQueue();
+    const timer = setInterval(() => { loadStats(); loadQueue(); }, 15_000);
     return () => clearInterval(timer);
-  }, [loadStats]);
+  }, [loadStats, loadQueue]);
 
   async function handleSync() {
     if (syncing) return;
@@ -169,6 +178,54 @@ export function SyncPanel() {
             {stats.failed} item{stats.failed > 1 ? "s" : ""} failed after 5 retries.
             Check your Supabase connection and table permissions.
           </span>
+        </div>
+      )}
+
+      {/* Queue detail toggle */}
+      {(stats.pending > 0 || stats.failed > 0) && (
+        <div className="border border-[#2E2840] rounded-xl overflow-hidden">
+          <button
+            onClick={() => setShowQueue((v) => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm text-[#9490A8] hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <span className="font-medium">
+              {queueItems.length} item{queueItems.length !== 1 ? "s" : ""} pending / failed
+            </span>
+            {showQueue ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {showQueue && (
+            <div className="border-t border-[#2E2840] divide-y divide-[#2E2840]/50 max-h-64 overflow-y-auto">
+              {queueItems.length === 0 ? (
+                <p className="px-4 py-4 text-xs text-[#9490A8] text-center">No items to display.</p>
+              ) : queueItems.map((item) => (
+                <div key={item.id} className="px-4 py-2.5 flex items-start gap-3">
+                  <span className={cn(
+                    "mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full",
+                    item.status === "failed" ? "bg-rose-400" : "bg-amber-400",
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-white capitalize">{item.operation}</span>
+                      <span className="text-xs text-[#9490A8] font-mono">{item.table_name}</span>
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded font-semibold",
+                        item.status === "failed"
+                          ? "bg-rose-400/15 text-rose-400"
+                          : "bg-amber-400/15 text-amber-400",
+                      )}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#9490A8] font-mono truncate mt-0.5">{item.record_id}</p>
+                    {item.retry_count > 0 && (
+                      <p className="text-[10px] text-[#5E5A72] mt-0.5">{item.retry_count} retries</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

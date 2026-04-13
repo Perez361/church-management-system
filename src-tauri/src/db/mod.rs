@@ -181,5 +181,69 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // App settings (key-value store)
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS app_settings (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await?;
+
+    // Member lifecycle events
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS member_events (
+            id          TEXT PRIMARY KEY,
+            member_id   TEXT NOT NULL REFERENCES members(id),
+            event_type  TEXT NOT NULL,
+            event_date  TEXT NOT NULL,
+            notes       TEXT,
+            created_at  TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await?;
+
+    // Departments
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS departments (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL UNIQUE,
+            description TEXT,
+            leader_id   TEXT REFERENCES members(id),
+            created_at  TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await?;
+
+    // Seed default departments if empty
+    sqlx::query(
+        "INSERT OR IGNORE INTO departments (id, name, created_at) VALUES
+         ('choir',         'Choir',         datetime('now')),
+         ('ushers',        'Ushers',        datetime('now')),
+         ('youth',         'Youth',         datetime('now')),
+         ('elders',        'Elders',        datetime('now')),
+         ('sunday_school', 'Sunday School', datetime('now'))",
+    )
+    .execute(pool)
+    .await?;
+
+    // Notifications persistence
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS notifications (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT NOT NULL,
+            message     TEXT NOT NULL,
+            type        TEXT NOT NULL DEFAULT 'info',
+            read        INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
 }

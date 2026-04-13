@@ -122,3 +122,30 @@ pub async fn trigger_sync() -> Result<String, String> {
 pub async fn get_sync_stats() -> Result<SyncStats, String> {
     Ok(crate::sync::get_stats().await)
 }
+
+/// Returns the most recent pending + failed sync_queue rows for display in the UI.
+#[tauri::command]
+pub async fn get_sync_queue_items() -> Result<Vec<SyncQueueItem>, AppError> {
+    let pool = get_pool();
+    let rows = sqlx::query_as::<_, SyncQueueItem>(
+        "SELECT id, table_name, record_id, operation, status, retry_count, created_at
+         FROM sync_queue
+         WHERE status IN ('pending', 'failed')
+         ORDER BY id DESC
+         LIMIT 50",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+#[derive(serde::Serialize, sqlx::FromRow)]
+pub struct SyncQueueItem {
+    pub id:          i64,
+    pub table_name:  String,
+    pub record_id:   String,
+    pub operation:   String,
+    pub status:      String,
+    pub retry_count: i64,
+    pub created_at:  String,
+}

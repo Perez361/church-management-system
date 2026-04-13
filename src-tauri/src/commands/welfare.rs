@@ -97,7 +97,7 @@ pub async fn create_welfare_disbursement(
         "INSERT INTO welfare_disbursements
          (id, beneficiary_id, amount, reason, disbursement_date,
           approved_by, status, created_at)
-         VALUES (?,?,?,?,?,?,'approved',?)",
+         VALUES (?,?,?,?,?,?,'pending',?)",
     )
     .bind(&id)
     .bind(&input.beneficiary_id)
@@ -121,6 +121,37 @@ pub async fn create_welfare_disbursement(
     let payload = serde_json::to_value(&row)
         .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
     queue_sync_payload(pool, "welfare_disbursements", &id, "insert", payload).await;
+
+    Ok(row)
+}
+
+#[tauri::command]
+pub async fn update_disbursement_status(
+    id: String,
+    status: String,
+) -> Result<WelfareDisbursement, AppError> {
+    if status != "approved" && status != "rejected" {
+        return Err(AppError { message: "Status must be 'approved' or 'rejected'".into(), code: "VALIDATION".into() });
+    }
+    let pool = get_pool();
+    sqlx::query(
+        "UPDATE welfare_disbursements SET status = ? WHERE id = ?",
+    )
+    .bind(&status)
+    .bind(&id)
+    .execute(pool)
+    .await?;
+
+    let row = sqlx::query_as::<_, WelfareDisbursement>(
+        "SELECT * FROM welfare_disbursements WHERE id = ?",
+    )
+    .bind(&id)
+    .fetch_one(pool)
+    .await?;
+
+    let payload = serde_json::to_value(&row)
+        .unwrap_or_else(|_| serde_json::json!({ "id": &id }));
+    queue_sync_payload(pool, "welfare_disbursements", &id, "update", payload).await;
 
     Ok(row)
 }

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Search, UserPlus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Search, UserPlus, MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -31,6 +32,7 @@ const filterTabs: { key: FilterStatus; label: string }[] = [
 type MenuPos = { id: string; right: number; top: number };
 
 export function MembersPage() {
+  const navigate = useNavigate();
   const [members, setMembers]           = useState<MemberSummary[]>([]);
   const [search, setSearch]             = useState("");
   const [statusFilter, setStatus]       = useState<FilterStatus>("all");
@@ -219,6 +221,15 @@ export function MembersPage() {
           className="z-50 bg-[#1E1B2C] border border-[#2E2840] rounded-xl shadow-2xl shadow-black/50 py-1 min-w-[130px]"
           onClick={(e) => e.stopPropagation()}
         >
+          <button
+            onClick={() => {
+              navigate(`/members/${menuPos.id}`);
+              setMenuPos(null);
+            }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-[#9490A8] hover:text-white hover:bg-white/5 transition-colors text-left"
+          >
+            <Eye size={13} /> View Profile
+          </button>
           <button
             onClick={() => {
               const m = members.find((x) => x.id === menuPos.id);

@@ -32,6 +32,10 @@ import { IncomeChart } from "@/components/ui/IncomeChart";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { RecordTitheModal } from "@/components/forms/RecordTitheModal";
+import { AddMemberModal } from "@/components/forms/AddMemberModal";
+import { RecordOfferingModal } from "@/components/forms/RecordOfferingModal";
+import { RecordWelfareModal } from "@/components/forms/RecordWelfareModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -73,19 +77,15 @@ const typeConfig = {
   offering: { Icon: Church,         color: "text-emerald-400", bg: "bg-emerald-400/10" },
 } as const;
 
-const quickActions = [
-  { label: "Record Tithe",    Icon: HandCoins,      color: "text-amber-400",   hover: "hover:border-amber-400/30   hover:bg-amber-400/5"   },
-  { label: "Add Member",      Icon: Users,          color: "text-blue-400",    hover: "hover:border-blue-400/30    hover:bg-blue-400/5"    },
-  { label: "Record Offering", Icon: Church,         color: "text-emerald-400", hover: "hover:border-emerald-400/30 hover:bg-emerald-400/5" },
-  { label: "Welfare Entry",   Icon: HeartHandshake, color: "text-rose-400",    hover: "hover:border-rose-400/30    hover:bg-rose-400/5"    },
-];
+// quickActions is built inside the component so it can reference setters — see below
 
 // monthProgress is built at render-time from live stats — no static values here
 
 // ─── Header actions ───────────────────────────────────────────────────────────
 
 function DashboardActions() {
-  const now       = new Date();
+  const navigate   = useNavigate();
+  const now        = new Date();
   const monthLabel = now.toLocaleDateString("en-GH", { month: "short", year: "numeric" });
   return (
     <div className="flex items-center gap-2">
@@ -93,7 +93,9 @@ function DashboardActions() {
         <CalendarDays size={11} className="text-[#9490A8]" />
         {monthLabel}
       </span>
-      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1C1828] border border-[#2E2840] text-xs text-[#8B879C] hover:text-white hover:border-[#3E3858] hover:bg-[#211D30] transition-all">
+      <button
+        onClick={() => navigate("/export")}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1C1828] border border-[#2E2840] text-xs text-[#8B879C] hover:text-white hover:border-[#3E3858] hover:bg-[#211D30] transition-all">
         <Download size={11} />
         Export
       </button>
@@ -113,12 +115,24 @@ export function Dashboard() {
   const [recentWelfare, setRecentWelfare] = useState<WelfareContribution[]>([]);
   const [actMembers,    setActMembers]    = useState<MemberSummary[]>([]);
 
-  useEffect(() => {
+  // Quick action modal state
+  const [titheOpen,   setTitheOpen]   = useState(false);
+  const [memberOpen,  setMemberOpen]  = useState(false);
+  const [offerOpen,   setOfferOpen]   = useState(false);
+  const [welfareOpen, setWelfareOpen] = useState(false);
+
+  const quickActions = [
+    { label: "Record Tithe",    Icon: HandCoins,      color: "text-amber-400",   hover: "hover:border-amber-400/30   hover:bg-amber-400/5",   onClick: () => setTitheOpen(true)   },
+    { label: "Add Member",      Icon: Users,          color: "text-blue-400",    hover: "hover:border-blue-400/30    hover:bg-blue-400/5",    onClick: () => setMemberOpen(true)  },
+    { label: "Record Offering", Icon: Church,         color: "text-emerald-400", hover: "hover:border-emerald-400/30 hover:bg-emerald-400/5", onClick: () => setOfferOpen(true)   },
+    { label: "Welfare Entry",   Icon: HeartHandshake, color: "text-rose-400",    hover: "hover:border-rose-400/30    hover:bg-rose-400/5",    onClick: () => setWelfareOpen(true) },
+  ];
+
+  function reload() {
     tauriGetDashboardStats().then(setStats).catch(console.error);
     tauriGetSyncPendingCount()
       .then((pending) => setSyncStatus({ ...syncStatus, pending }))
       .catch(console.error);
-
     Promise.all([
       tauriGetTithePayments(),
       tauriGetOfferings(),
@@ -132,7 +146,9 @@ export function Dashboard() {
         setActMembers(m);
       })
       .catch(console.error);
-  }, []);
+  }
+
+  useEffect(() => { reload(); }, []);
 
   // ── Build activity items ────────────────────────────────────────────────────
   const activityGroups = useMemo(() => {
@@ -371,9 +387,10 @@ export function Dashboard() {
                 <h2 className="text-sm font-semibold text-white">Quick Actions</h2>
               </CardHeader>
               <CardContent className="px-4 pt-2.5 pb-4 space-y-2">
-                {quickActions.map(({ label, Icon, color, hover }) => (
+                {quickActions.map(({ label, Icon, color, hover, onClick }) => (
                   <button
                     key={label}
+                    onClick={onClick}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#211D30] border border-[#2E2840]",
                       "text-left transition-all duration-150 group cursor-pointer hover:-translate-y-px hover:shadow-md",
@@ -456,6 +473,11 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      <RecordTitheModal   open={titheOpen}   onClose={() => setTitheOpen(false)}   onSuccess={reload} />
+      <AddMemberModal     open={memberOpen}  onClose={() => setMemberOpen(false)}  onSuccess={reload} />
+      <RecordOfferingModal open={offerOpen}  onClose={() => setOfferOpen(false)}   onSuccess={reload} />
+      <RecordWelfareModal open={welfareOpen} onClose={() => setWelfareOpen(false)} onSuccess={reload} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/layout/Layout";
 import { Dashboard } from "@/pages/Dashboard";
 import { MembersPage } from "@/pages/members/MembersPage";
+import { MemberProfilePage } from "@/pages/members/MemberProfilePage";
 import { TithePage } from "@/pages/tithe/TithePage";
 import { OfferingsPage } from "@/pages/offerings/OfferingsPage";
 import { WelfarePage } from "@/pages/welfare/WelfarePage";
@@ -16,6 +17,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/members" element={<MembersPage />} />
+          <Route path="/members/:id" element={<MemberProfilePage />} />
           <Route path="/tithe" element={<TithePage />} />
           <Route path="/offerings" element={<OfferingsPage />} />
           <Route path="/welfare" element={<WelfarePage />} />
