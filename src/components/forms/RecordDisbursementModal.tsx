@@ -3,6 +3,7 @@ import { ArrowDownLeft } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, Input, Select, Textarea } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 import {
   tauriCreateWelfareDisbursement, tauriGetMembers,
   type CreateDisbursementInput, type MemberSummary,
@@ -14,21 +15,30 @@ interface Props {
   onSuccess: () => void;
 }
 
+type BeneficiaryType = "member" | "cause";
+
 interface FormState {
-  beneficiary_id: string;
-  amount: string;
-  reason: string;
+  beneficiaryType:   BeneficiaryType;
+  beneficiary_id:    string;
+  causeName:         string;
+  amount:            string;
+  reason:            string;
   disbursement_date: string;
-  approved_by: string;
+  approved_by:       string;
 }
 
 const TODAY = new Date().toISOString().split("T")[0];
 const EMPTY: FormState = {
-  beneficiary_id: "", amount: "", reason: "",
-  disbursement_date: TODAY, approved_by: "",
+  beneficiaryType:   "member",
+  beneficiary_id:    "",
+  causeName:         "",
+  amount:            "",
+  reason:            "",
+  disbursement_date: TODAY,
+  approved_by:       "",
 };
 
-type Errors = Partial<Record<keyof FormState, string>>;
+type Errors = Partial<Record<keyof FormState | "beneficiary", string>>;
 
 export function RecordDisbursementModal({ open, onClose, onSuccess }: Props) {
   const [form, setForm]           = useState<FormState>(EMPTY);
@@ -57,10 +67,16 @@ export function RecordDisbursementModal({ open, onClose, onSuccess }: Props) {
 
   function validate(): boolean {
     const e: Errors = {};
-    if (!form.beneficiary_id)                          e.beneficiary_id = "Select a member";
-    if (!form.amount || Number(form.amount) <= 0)      e.amount         = "Enter a valid amount";
-    if (!form.reason.trim())                           e.reason         = "Required";
-    if (!form.approved_by.trim())                      e.approved_by    = "Required";
+    if (form.beneficiaryType === "member" && !form.beneficiary_id)
+      e.beneficiary = "Select a member";
+    if (form.beneficiaryType === "cause" && !form.causeName.trim())
+      e.beneficiary = "Enter a cause / purpose name";
+    if (!form.amount || Number(form.amount) <= 0)
+      e.amount = "Enter a valid amount";
+    if (!form.reason.trim())
+      e.reason = "Required";
+    if (!form.approved_by.trim())
+      e.approved_by = "Required";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -72,7 +88,9 @@ export function RecordDisbursementModal({ open, onClose, onSuccess }: Props) {
     setServerErr("");
     try {
       const input: CreateDisbursementInput = {
-        beneficiary_id:    form.beneficiary_id,
+        beneficiary_id:    form.beneficiaryType === "member" ? form.beneficiary_id : "",
+        beneficiary_type:  form.beneficiaryType,
+        beneficiary_name:  form.beneficiaryType === "cause" ? form.causeName.trim() : undefined,
         amount:            Number(form.amount),
         reason:            form.reason.trim(),
         disbursement_date: form.disbursement_date,
@@ -96,7 +114,7 @@ export function RecordDisbursementModal({ open, onClose, onSuccess }: Props) {
   return (
     <Modal open={open} onClose={() => { setForm(EMPTY); setErrors({}); setServerErr(""); onClose(); }}
       title="Record Disbursement"
-      subtitle="Record a welfare fund disbursement to a member"
+      subtitle="Record a welfare fund disbursement"
       width="md">
       <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
         {serverErr && (
@@ -105,16 +123,50 @@ export function RecordDisbursementModal({ open, onClose, onSuccess }: Props) {
           </div>
         )}
 
-        <FormField label="Beneficiary" required error={errors.beneficiary_id}>
-          <Select
-            value={form.beneficiary_id}
-            onChange={field("beneficiary_id")}
-            options={memberOptions}
-            placeholder={loadingMembers ? "Loading members…" : "Select member…"}
-            hasError={!!errors.beneficiary_id}
-            disabled={loadingMembers}
-          />
-        </FormField>
+        {/* Beneficiary type toggle */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-[#9490A8] uppercase tracking-wider">Disbursement To</p>
+          <div className="flex gap-2">
+            {(["member", "cause"] as BeneficiaryType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, beneficiaryType: t, beneficiary_id: "", causeName: "" }))}
+                className={cn(
+                  "flex-1 py-2 rounded-xl text-xs font-semibold border transition-all",
+                  form.beneficiaryType === t
+                    ? "bg-amber-400/10 border-amber-400/30 text-amber-400"
+                    : "bg-transparent border-[#2E2840] text-[#9490A8] hover:text-white hover:border-white/20",
+                )}
+              >
+                {t === "member" ? "A Member" : "A Cause / Event"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Member select OR cause name */}
+        {form.beneficiaryType === "member" ? (
+          <FormField label="Beneficiary Member" required error={errors.beneficiary}>
+            <Select
+              value={form.beneficiary_id}
+              onChange={field("beneficiary_id")}
+              options={memberOptions}
+              placeholder={loadingMembers ? "Loading members…" : "Select member…"}
+              hasError={!!errors.beneficiary}
+              disabled={loadingMembers}
+            />
+          </FormField>
+        ) : (
+          <FormField label="Cause / Event Name" required error={errors.beneficiary}>
+            <Input
+              value={form.causeName}
+              onChange={field("causeName")}
+              placeholder="e.g. Funeral expenses, Flood relief, Medical bill…"
+              hasError={!!errors.beneficiary}
+            />
+          </FormField>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Amount (GHS)" required error={errors.amount}>

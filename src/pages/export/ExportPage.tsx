@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   FileDown, FileText, Users, HandCoins, Church,
   HeartHandshake, BarChart3, Printer, RefreshCw,
-  CalendarCheck,
+  CalendarCheck, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
@@ -233,8 +233,7 @@ function SummaryCard({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function ExportPage() {
-  const thisYear = new Date().getFullYear();
-  const [year,    setYear]    = useState(thisYear);
+  const [year,    setYear]    = useState(new Date().getFullYear());
   const [summary, setSummary] = useState<ExportSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -249,8 +248,6 @@ export function ExportPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [year]);
-
-  const yearOptions = Array.from({ length: 5 }, (_, i) => thisYear + i);
 
   return (
     <div>
@@ -273,48 +270,34 @@ export function ExportPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto pb-0.5 -mx-1 px-1">
-            <div className="flex items-center gap-2 w-max">
-              {yearOptions.map((y) => {
-                const active = y === year;
-                return (
-                  <button
-                    key={y}
-                    onClick={() => setYear(y)}
-                    className={
-                      active
-                        ? "px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-black shadow-[0_2px_12px_rgba(251,191,36,0.35)] transition-all whitespace-nowrap"
-                        : "px-5 py-2.5 rounded-xl text-sm font-medium bg-[#211D30] border border-[#2E2840] text-[#9490A8] hover:text-white hover:border-white/20 transition-all whitespace-nowrap"
-                    }
-                  >
-                    {y}
-                    {active && (
-                      <span className="ml-2 text-[10px] font-normal opacity-70">selected</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex items-center gap-1 bg-[#15121F] border border-[#2E2840] rounded-xl p-1 w-fit">
+            <button
+              onClick={() => setYear((y) => y - 1)}
+              className="p-1.5 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-all"
+            >
+              <ChevronLeft size={13} />
+            </button>
+            <span className="px-4 py-1 text-sm font-bold text-white min-w-[64px] text-center">
+              {year}
+            </span>
+            <button
+              onClick={() => setYear((y) => y + 1)}
+              className="p-1.5 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-all"
+            >
+              <ChevronRight size={13} />
+            </button>
           </div>
         </div>
 
         {/* ── Summary cards ──────────────────────────────────────── */}
         {summary && !loading && (
           <div className="space-y-4">
-            {/* Section header + print button */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-white">Annual Review — {year}</h2>
-                <p className="text-xs text-[#9490A8] mt-0.5">
-                  Full financial &amp; membership summary for {year}
-                </p>
-              </div>
-              <button
-                onClick={() => triggerPrint(year, summary)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-400/10 border border-rose-400/30 text-rose-400 text-sm font-medium hover:bg-rose-400/20 hover:border-rose-400/50 transition-all"
-              >
-                <Printer size={14} /> Print / Save as PDF
-              </button>
+            {/* Section header */}
+            <div>
+              <h2 className="text-sm font-semibold text-white">Annual Review — {year}</h2>
+              <p className="text-xs text-[#9490A8] mt-0.5">
+                Full financial &amp; membership summary for {year}
+              </p>
             </div>
 
             {/* KPI row */}

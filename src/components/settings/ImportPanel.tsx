@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, X } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { tauriCreateMember, tauriCreateTithePayment, type CreateMemberInput, type CreateTitheInput } from "@/lib/tauri";
@@ -39,6 +40,20 @@ function parseCSV(text: string): string[][] {
   return rows;
 }
 
+// ── Excel parser (SheetJS) ────────────────────────────────────────────────────
+
+async function parseExcel(file: File): Promise<string[][]> {
+  const buf  = await file.arrayBuffer();
+  const wb   = XLSX.read(buf, { type: "array" });
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const aoa: (string | number | boolean | null | undefined)[][] =
+    XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  // Normalise all cells to strings
+  return aoa
+    .map((row) => row.map((cell) => (cell === null || cell === undefined ? "" : String(cell).trim())))
+    .filter((row) => row.some((c) => c !== ""));
+}
+
 // ── Row parsers ───────────────────────────────────────────────────────────────
 
 function parseMemberRow(headers: string[], row: string[]): CreateMemberInput | string {
@@ -71,21 +86,21 @@ function parseTitheRow(headers: string[], row: string[]): CreateTitheInput | str
     const idx = headers.findIndex((h) => h.toLowerCase().replace(/\s+/g, "_") === name);
     return idx >= 0 ? row[idx]?.trim() ?? "" : "";
   };
-  const memberId = col("member_id");
-  const amountStr = col("amount");
+  const memberId    = col("member_id");
+  const amountStr   = col("amount");
   const paymentDate = col("payment_date");
   const periodMonth = parseInt(col("period_month"), 10);
   const periodYear  = parseInt(col("period_year"),  10);
   const paymentMode = col("payment_mode") || "cash";
   const receivedBy  = col("received_by")  || "import";
-  if (!memberId)        return "Missing member_id";
-  if (!amountStr)       return "Missing amount";
-  if (!paymentDate)     return "Missing payment_date";
+  if (!memberId)          return "Missing member_id";
+  if (!amountStr)         return "Missing amount";
+  if (!paymentDate)       return "Missing payment_date";
   if (isNaN(periodMonth)) return "Invalid period_month";
   if (isNaN(periodYear))  return "Invalid period_year";
   return {
-    member_id: memberId,
-    amount: parseFloat(amountStr),
+    member_id:    memberId,
+    amount:       parseFloat(amountStr),
     payment_date: paymentDate,
     period_month: periodMonth,
     period_year:  periodYear,
@@ -109,13 +124,22 @@ export function ImportPanel() {
     setResult(null);
     setImporting(true);
     try {
-      const text = await file.text();
-      const rows = parseCSV(text);
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      let rows: string[][];
+
+      if (ext === "xlsx" || ext === "xls" || ext === "ods") {
+        rows = await parseExcel(file);
+      } else {
+        // CSV / TSV / plain text
+        const text = await file.text();
+        rows = parseCSV(text);
+      }
+
       if (rows.length < 2) {
         setResult({ success: 0, failed: 0, errors: ["File is empty or has only a header row."] });
         return;
       }
-      const headers = rows[0].map((h) => h.toLowerCase().replace(/\s+/g, "_"));
+      const headers  = rows[0].map((h) => h.toLowerCase().replace(/\s+/g, "_"));
       const dataRows = rows.slice(1);
       let success = 0;
       const errors: string[] = [];
@@ -168,7 +192,7 @@ export function ImportPanel() {
       <CardHeader className="px-6 py-4">
         <h2 className="text-sm font-semibold text-white">Import Data</h2>
         <p className="text-xs text-[#9490A8] mt-0.5">
-          Import members or tithe records from a CSV file.
+          Import members or tithe records from a CSV or Excel file.
         </p>
       </CardHeader>
       <CardContent className="px-6 py-5 space-y-4">
@@ -209,25 +233,25 @@ export function ImportPanel() {
           </div>
           <div className="text-center">
             <p className="text-sm text-white font-medium">
-              {importing ? "Importing…" : "Drop CSV file here or click to browse"}
+              {importing ? "Importing…" : "Drop file here or click to browse"}
             </p>
-            <p className="text-xs text-[#9490A8] mt-1">Only .csv files are accepted</p>
+            <p className="text-xs text-[#9490A8] mt-1">Supports .csv, .xlsx, .xls</p>
           </div>
           <input
             ref={fileRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={(e) => handleFiles(e.target.files)}
           />
         </div>
 
-        {/* CSV format hint */}
+        {/* Column format hint */}
         <div className="bg-[#211D30] rounded-xl p-4 space-y-1.5">
           <div className="flex items-center gap-2 mb-2">
             <FileText size={13} className="text-[#9490A8]" />
             <span className="text-xs font-semibold text-[#9490A8] uppercase tracking-wider">
-              Required CSV columns — {importType}
+              Required columns — {importType}
             </span>
           </div>
           {importType === "members" ? (
@@ -241,6 +265,9 @@ export function ImportPanel() {
               <span className="opacity-60">optional: payment_mode, received_by, reference_no, notes</span>
             </p>
           )}
+          <p className="text-[10px] text-[#9490A8]/60 mt-1">
+            Column names must be in the first row. Excel column headers work the same as CSV.
+          </p>
         </div>
 
         {/* Result */}

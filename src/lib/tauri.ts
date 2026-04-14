@@ -167,8 +167,8 @@ export interface CreateWelfareInput {
   received_by: string;
 }
 
-export const tauriGetWelfareContributions = (memberId?: string) =>
-  invoke<WelfareContribution[]>("get_welfare_contributions", { memberId });
+export const tauriGetWelfareContributions = (memberId?: string, month?: number, year?: number) =>
+  invoke<WelfareContribution[]>("get_welfare_contributions", { memberId, month, year });
 
 export const tauriCreateWelfareContribution = (input: CreateWelfareInput) =>
   invoke<WelfareContribution>("create_welfare_contribution", { input });
@@ -179,6 +179,8 @@ export const tauriGetWelfareBalance = () =>
 export interface WelfareDisbursement {
   id: string;
   beneficiary_id: string;
+  beneficiary_type: string;
+  beneficiary_name?: string;
   amount: number;
   reason: string;
   disbursement_date: string;
@@ -190,6 +192,8 @@ export interface WelfareDisbursement {
 
 export interface CreateDisbursementInput {
   beneficiary_id: string;
+  beneficiary_type: string;
+  beneficiary_name?: string;
   amount: number;
   reason: string;
   disbursement_date: string;
@@ -235,7 +239,8 @@ export interface SyncQueueItem {
   created_at:  string;
 }
 
-export const tauriGetSyncQueueItems = () => invoke<SyncQueueItem[]>("get_sync_queue_items");
+export const tauriGetSyncQueueItems  = () => invoke<SyncQueueItem[]>("get_sync_queue_items");
+export const tauriRetryFailedSync    = () => invoke<number>("retry_failed_sync");
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 

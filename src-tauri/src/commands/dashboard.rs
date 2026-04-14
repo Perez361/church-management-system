@@ -149,3 +149,16 @@ pub struct SyncQueueItem {
     pub retry_count: i64,
     pub created_at:  String,
 }
+
+/// Resets all failed sync_queue items back to pending so they will be retried.
+/// Returns the number of items reset.
+#[tauri::command]
+pub async fn retry_failed_sync() -> Result<u64, AppError> {
+    let pool = get_pool();
+    let result = sqlx::query(
+        "UPDATE sync_queue SET status = 'pending', retry_count = 0 WHERE status = 'failed'",
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}

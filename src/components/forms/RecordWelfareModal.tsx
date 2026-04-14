@@ -12,6 +12,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  prefillMemberId?: string;
 }
 
 const PAYMENT_MODES = [
@@ -34,7 +35,7 @@ const EMPTY: FormState = {
 
 type Errors = Partial<Record<keyof FormState, string>>;
 
-export function RecordWelfareModal({ open, onClose, onSuccess }: Props) {
+export function RecordWelfareModal({ open, onClose, onSuccess, prefillMemberId }: Props) {
   const [form, setForm]           = useState<FormState>(EMPTY);
   const [errors, setErrors]       = useState<Errors>({});
   const [loading, setLoading]     = useState(false);
@@ -49,8 +50,10 @@ export function RecordWelfareModal({ open, onClose, onSuccess }: Props) {
       .then(setMembers)
       .catch(console.error)
       .finally(() => setLoadingMembers(false));
-    setForm(EMPTY);
-  }, [open]);
+    setForm({ ...EMPTY, member_id: prefillMemberId ?? "" });
+    setErrors({});
+    setServerErr("");
+  }, [open, prefillMemberId]);
 
   function field(key: keyof FormState) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>

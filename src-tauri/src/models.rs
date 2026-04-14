@@ -131,6 +131,8 @@ pub struct CreateWelfareInput {
 pub struct WelfareDisbursement {
     pub id: String,
     pub beneficiary_id: String,
+    pub beneficiary_type: String,
+    pub beneficiary_name: Option<String>,
     pub amount: f64,
     pub reason: String,
     pub disbursement_date: String,
@@ -143,6 +145,8 @@ pub struct WelfareDisbursement {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateDisbursementInput {
     pub beneficiary_id: String,
+    pub beneficiary_type: String,
+    pub beneficiary_name: Option<String>,
     pub amount: f64,
     pub reason: String,
     pub disbursement_date: String,

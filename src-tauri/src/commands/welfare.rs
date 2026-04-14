@@ -7,26 +7,45 @@ use uuid::Uuid;
 #[tauri::command]
 pub async fn get_welfare_contributions(
     member_id: Option<String>,
+    month:     Option<i64>,
+    year:      Option<i64>,
 ) -> Result<Vec<WelfareContribution>, AppError> {
     let pool = get_pool();
 
-    let rows = if let Some(mid) = member_id {
-        sqlx::query_as::<_, WelfareContribution>(
-            "SELECT * FROM welfare_contributions
-             WHERE member_id = ?
-             ORDER BY contribution_date DESC",
-        )
-        .bind(&mid)
-        .fetch_all(pool)
-        .await?
-    } else {
-        sqlx::query_as::<_, WelfareContribution>(
-            "SELECT * FROM welfare_contributions
-             ORDER BY contribution_date DESC
-             LIMIT 100",
-        )
-        .fetch_all(pool)
-        .await?
+    let rows = match (member_id, month, year) {
+        (Some(mid), None, None) => {
+            sqlx::query_as::<_, WelfareContribution>(
+                "SELECT * FROM welfare_contributions
+                 WHERE member_id = ?
+                 ORDER BY contribution_date DESC",
+            )
+            .bind(&mid)
+            .fetch_all(pool)
+            .await?
+        }
+        (None, Some(m), Some(y)) => {
+            let month_str = format!("{:02}", m);
+            let year_str  = format!("{}", y);
+            sqlx::query_as::<_, WelfareContribution>(
+                "SELECT * FROM welfare_contributions
+                 WHERE strftime('%m', contribution_date) = ?
+                   AND strftime('%Y', contribution_date) = ?
+                 ORDER BY contribution_date DESC",
+            )
+            .bind(&month_str)
+            .bind(&year_str)
+            .fetch_all(pool)
+            .await?
+        }
+        _ => {
+            sqlx::query_as::<_, WelfareContribution>(
+                "SELECT * FROM welfare_contributions
+                 ORDER BY contribution_date DESC
+                 LIMIT 200",
+            )
+            .fetch_all(pool)
+            .await?
+        }
     };
 
     Ok(rows)
@@ -93,21 +112,39 @@ pub async fn create_welfare_disbursement(
     let id   = Uuid::new_v4().to_string();
     let now  = Utc::now().to_rfc3339();
 
+    // For cause disbursements the beneficiary_id is not a real member UUID,
+    // so we temporarily disable FK checks on this connection.
+    let is_cause = input.beneficiary_type == "cause";
+    let beneficiary_id = if is_cause { id.clone() } else { input.beneficiary_id.clone() };
+
+    let mut conn = pool.acquire().await.map_err(|e| AppError { message: e.to_string(), code: "DB_ERROR".into() })?;
+
+    if is_cause {
+        let _ = sqlx::query("PRAGMA foreign_keys=OFF").execute(&mut *conn).await;
+    }
+
     sqlx::query(
         "INSERT INTO welfare_disbursements
-         (id, beneficiary_id, amount, reason, disbursement_date,
-          approved_by, status, created_at)
-         VALUES (?,?,?,?,?,?,'pending',?)",
+         (id, beneficiary_id, beneficiary_type, beneficiary_name, amount, reason,
+          disbursement_date, approved_by, status, created_at)
+         VALUES (?,?,?,?,?,?,?,?,'pending',?)",
     )
     .bind(&id)
-    .bind(&input.beneficiary_id)
+    .bind(&beneficiary_id)
+    .bind(&input.beneficiary_type)
+    .bind(&input.beneficiary_name)
     .bind(input.amount)
     .bind(&input.reason)
     .bind(&input.disbursement_date)
     .bind(&input.approved_by)
     .bind(&now)
-    .execute(pool)
+    .execute(&mut *conn)
     .await?;
+
+    if is_cause {
+        let _ = sqlx::query("PRAGMA foreign_keys=ON").execute(&mut *conn).await;
+    }
+    drop(conn);
 
     // Fetch the full inserted row so we have the complete payload for sync
     let row = sqlx::query_as::<_, WelfareDisbursement>(

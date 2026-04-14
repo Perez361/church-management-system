@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, HandCoins, Pencil, CalendarDays, Phone, Mail,
   MapPin, User, Users, Calendar, Plus, Trash2, CheckCircle,
+  HeartHandshake,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardContent } from "@/components/ui/Card";
@@ -16,8 +17,9 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils";
 import {
   tauriGetMember, tauriGetTithePayments, tauriGetMemberEvents,
-  tauriCreateMemberEvent, tauriDeleteMemberEvent,
-  type Member, type TithePayment, type MemberEvent,
+  tauriCreateMemberEvent, tauriDeleteMemberEvent, tauriUpdateMember,
+  tauriGetWelfareContributions,
+  type Member, type TithePayment, type MemberEvent, type WelfareContribution,
 } from "@/lib/tauri";
 import type { MemberSummary } from "@/lib/tauri";
 import { departmentNames } from "@/lib/mockData";
@@ -34,6 +36,17 @@ const EVENT_TYPES = [
   "baptism", "confirmation", "marriage", "first_communion",
   "dedication", "transfer_in", "transfer_out", "deceased",
 ];
+
+const EVENT_ICONS: Record<string, string> = {
+  marriage:    "💍",
+  deceased:    "🕊️",
+  baptism:     "✝",
+  confirmation:"🙏",
+  transfer_in: "→",
+  transfer_out:"←",
+  dedication:  "★",
+  first_communion: "✦",
+};
 
 function fmt(iso: string | undefined) {
   if (!iso) return "—";
@@ -55,7 +68,7 @@ interface AddEventModalProps {
   memberId: string;
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSaved: (eventType: string) => void;
 }
 
 const EVENT_OPTIONS = EVENT_TYPES.map((t) => ({
@@ -63,20 +76,40 @@ const EVENT_OPTIONS = EVENT_TYPES.map((t) => ({
   label: t.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "),
 }));
 
-function AddEventModal({ memberId, open, onClose, onSuccess }: AddEventModalProps) {
-  const [eventType, setEventType] = useState(EVENT_TYPES[0]);
-  const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
-  const [notes,     setNotes]     = useState("");
-  const [saving,    setSaving]    = useState(false);
-  const [error,     setError]     = useState("");
+function AddEventModal({ memberId, open, onClose, onSaved }: AddEventModalProps) {
+  const [eventType,  setEventType]  = useState(EVENT_TYPES[0]);
+  const [eventDate,  setEventDate]  = useState(new Date().toISOString().slice(0, 10));
+  const [spouseName, setSpouseName] = useState("");
+  const [notes,      setNotes]      = useState("");
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState("");
+
+  function reset() {
+    setEventType(EVENT_TYPES[0]);
+    setEventDate(new Date().toISOString().slice(0, 10));
+    setSpouseName("");
+    setNotes("");
+    setError("");
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true); setError("");
     try {
-      await tauriCreateMemberEvent({ member_id: memberId, event_type: eventType, event_date: eventDate, notes: notes.trim() || undefined });
-      setEventType(EVENT_TYPES[0]); setEventDate(new Date().toISOString().slice(0, 10)); setNotes("");
-      onSuccess(); onClose();
+      // For marriage events, prepend spouse name to notes
+      let finalNotes = notes.trim() || undefined;
+      if (eventType === "marriage" && spouseName.trim()) {
+        finalNotes = `Married to: ${spouseName.trim()}${notes.trim() ? `\n${notes.trim()}` : ""}`;
+      }
+      await tauriCreateMemberEvent({
+        member_id:  memberId,
+        event_type: eventType,
+        event_date: eventDate,
+        notes:      finalNotes,
+      });
+      onSaved(eventType);
+      reset();
+      onClose();
     } catch (err) {
       setError(String(err));
     } finally {
@@ -85,7 +118,7 @@ function AddEventModal({ memberId, open, onClose, onSuccess }: AddEventModalProp
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Add Lifecycle Event" width="sm">
+    <Modal open={open} onClose={() => { reset(); onClose(); }} title="Add Lifecycle Event" width="sm">
       <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
         {error && (
           <div className="px-4 py-3 rounded-xl bg-rose-400/10 border border-rose-400/30 text-rose-400 text-sm">{error}</div>
@@ -96,11 +129,29 @@ function AddEventModal({ memberId, open, onClose, onSuccess }: AddEventModalProp
         <FormField label="Date" required>
           <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
         </FormField>
+        {eventType === "marriage" && (
+          <FormField label="Spouse Name" required>
+            <Input
+              value={spouseName}
+              onChange={(e) => setSpouseName(e.target.value)}
+              placeholder="Full name of spouse"
+            />
+          </FormField>
+        )}
+        {eventType === "deceased" && (
+          <div className="px-4 py-3 rounded-xl bg-rose-400/10 border border-rose-400/20 text-rose-400 text-xs">
+            Saving this event will automatically set the member's status to <strong>Inactive</strong>.
+          </div>
+        )}
         <FormField label="Notes">
-          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional notes…" />
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={eventType === "marriage" ? "Optional additional notes…" : "Optional notes…"}
+          />
         </FormField>
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-[#2E2840]">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }}>Cancel</Button>
           <Button type="submit" loading={saving} icon={<CheckCircle size={14} />}>Save Event</Button>
         </div>
       </form>
@@ -114,10 +165,11 @@ export function MemberProfilePage() {
   const { id }     = useParams<{ id: string }>();
   const navigate   = useNavigate();
 
-  const [member,   setMember]   = useState<Member | null>(null);
-  const [payments, setPayments] = useState<TithePayment[]>([]);
-  const [events,   setEvents]   = useState<MemberEvent[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [member,        setMember]        = useState<Member | null>(null);
+  const [payments,      setPayments]      = useState<TithePayment[]>([]);
+  const [events,        setEvents]        = useState<MemberEvent[]>([]);
+  const [welfare,       setWelfare]       = useState<WelfareContribution[]>([]);
+  const [loading,       setLoading]       = useState(true);
 
   const [editOpen,     setEditOpen]     = useState(false);
   const [titheOpen,    setTitheOpen]    = useState(false);
@@ -128,14 +180,16 @@ export function MemberProfilePage() {
     if (!id) return;
     setLoading(true);
     try {
-      const [mem, pmts, evts] = await Promise.all([
+      const [mem, pmts, evts, wlf] = await Promise.all([
         tauriGetMember(id),
         tauriGetTithePayments(undefined, undefined, id),
         tauriGetMemberEvents(id),
+        tauriGetWelfareContributions(id),
       ]);
       setMember(mem);
       setPayments(pmts);
       setEvents(evts);
+      setWelfare(wlf);
     } catch {
       navigate("/members");
     } finally {
@@ -155,6 +209,16 @@ export function MemberProfilePage() {
     }
   }
 
+  async function handleEventSaved(eventType: string) {
+    if (eventType === "deceased") {
+      // Auto-mark as inactive
+      try {
+        await tauriUpdateMember(id!, { status: "inactive" });
+      } catch { /* ignore */ }
+    }
+    load();
+  }
+
   if (loading) {
     return (
       <div>
@@ -172,8 +236,8 @@ export function MemberProfilePage() {
   const totalTithe  = payments.reduce((s, p) => s + p.amount, 0);
   const thisYear    = new Date().getFullYear();
   const titheYear   = payments.filter((p) => p.period_year === thisYear).reduce((s, p) => s + p.amount, 0);
+  const totalWelfare = welfare.reduce((s, w) => s + w.amount, 0);
 
-  // Summary of member as MemberSummary (for EditMemberModal)
   const memberSummary: MemberSummary = {
     id:              member.id,
     member_no:       member.member_no,
@@ -227,10 +291,10 @@ export function MemberProfilePage() {
                   <img
                     src={member.photo_url}
                     alt={initials}
-                    className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-400/30"
+                    className="w-60 h-62 rounded-4xl object-cover border-2 border-amber-400/30"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-2xl bg-amber-400/15 border-2 border-amber-400/30 flex items-center justify-center text-amber-400 text-3xl font-bold">
+                  <div className="w-60 h-62 rounded-2xl bg-amber-400/15 border-2 border-amber-400/30 flex items-center justify-center text-amber-400 text-5xl font-bold">
                     {initials}
                   </div>
                 )}
@@ -245,10 +309,10 @@ export function MemberProfilePage() {
             {/* Quick stats */}
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "All-time Tithe", value: formatCurrency(totalTithe), color: "text-amber-400" },
-                { label: `${thisYear} Tithe`,    value: formatCurrency(titheYear),  color: "text-emerald-400" },
-                { label: "Payments",         value: String(payments.length),   color: "text-blue-400" },
-                { label: "Events",           value: String(events.length),     color: "text-purple-400" },
+                { label: "All-time Tithe",  value: formatCurrency(totalTithe),  color: "text-amber-400"   },
+                { label: `${thisYear} Tithe`, value: formatCurrency(titheYear),  color: "text-emerald-400" },
+                { label: "Tithe Payments",  value: String(payments.length),     color: "text-blue-400"    },
+                { label: "Welfare Contrib", value: formatCurrency(totalWelfare), color: "text-rose-400"    },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-[#1C1828] border border-[#2E2840] rounded-xl p-3 text-center">
                   <p className={cn("text-lg font-bold leading-none", color)}>{value}</p>
@@ -277,7 +341,7 @@ export function MemberProfilePage() {
               </CardContent>
             </Card>
 
-            {/* Contact */}
+            {/* Contact & Ministry */}
             <Card>
               <CardHeader className="px-5 py-3.5">
                 <div className="flex items-center gap-2">
@@ -358,6 +422,52 @@ export function MemberProfilePage() {
           )}
         </Card>
 
+        {/* ── Welfare contribution history ── */}
+        <Card>
+          <CardHeader className="px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <HeartHandshake size={13} className="text-rose-400" />
+              <h3 className="text-sm font-semibold text-white">Welfare Contributions</h3>
+            </div>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#2E2840]/60">
+                  {["Amount", "Date", "Mode", "Reference", "Received By"].map((h) => (
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-bold text-[#9490A8] uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {welfare.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-10 text-center text-[#9490A8] text-sm">
+                      No welfare contributions recorded.
+                    </td>
+                  </tr>
+                ) : welfare.slice(0, 10).map((w) => (
+                  <tr key={w.id} className="border-b border-[#2E2840]/40 last:border-0 hover:bg-white/[0.015] transition-colors">
+                    <td className="px-5 py-3"><span className="text-sm font-semibold text-rose-400">{formatCurrency(w.amount)}</span></td>
+                    <td className="px-5 py-3"><span className="text-sm text-[#9490A8]">{fmt(w.contribution_date)}</span></td>
+                    <td className="px-5 py-3"><span className="text-sm text-[#9490A8] capitalize">{w.payment_mode.replace("_", " ")}</span></td>
+                    <td className="px-5 py-3"><span className="font-mono text-xs text-[#9490A8]">{w.reference_no ?? "—"}</span></td>
+                    <td className="px-5 py-3"><span className="text-sm text-white/80">{w.received_by}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+              {welfare.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-[#2E2840]">
+                    <td className="px-5 py-2.5 text-xs font-bold text-rose-400">{formatCurrency(totalWelfare)}</td>
+                    <td colSpan={4} className="px-5 py-2.5 text-xs text-[#9490A8]">{welfare.length} contribution{welfare.length !== 1 ? "s" : ""}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </Card>
+
         {/* ── Lifecycle events ── */}
         <Card>
           <CardHeader className="px-5 py-3.5">
@@ -383,16 +493,37 @@ export function MemberProfilePage() {
             ) : (
               <div className="space-y-0 divide-y divide-[#2E2840]/50">
                 {events.map((ev) => {
-                  const label = ev.event_type.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+                  const label      = ev.event_type.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+                  const icon       = EVENT_ICONS[ev.event_type] ?? "•";
+                  const isMarriage = ev.event_type === "marriage";
+                  const isDeceased = ev.event_type === "deceased";
+
+                  // Extract spouse name from notes if present
+                  let spouseDisplay: string | null = null;
+                  let restNotes = ev.notes ?? "";
+                  if (isMarriage && ev.notes?.startsWith("Married to: ")) {
+                    const lines = ev.notes.split("\n");
+                    spouseDisplay = lines[0].replace("Married to: ", "");
+                    restNotes = lines.slice(1).join("\n").trim();
+                  }
+
                   return (
                     <div key={ev.id} className="flex items-start gap-3 py-3 group">
-                      <div className="w-7 h-7 rounded-lg bg-purple-400/10 border border-purple-400/20 flex items-center justify-center shrink-0 mt-0.5">
-                        <CalendarDays size={12} className="text-purple-400" />
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 text-sm",
+                        isDeceased ? "bg-[#9490A8]/10 border border-[#9490A8]/20"
+                          : isMarriage ? "bg-rose-400/10 border border-rose-400/20"
+                          : "bg-purple-400/10 border border-purple-400/20",
+                      )}>
+                        <span>{icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-white">{label}</p>
                         <p className="text-xs text-[#9490A8]">{fmt(ev.event_date)}</p>
-                        {ev.notes && <p className="text-xs text-[#9490A8]/70 mt-0.5 italic">{ev.notes}</p>}
+                        {spouseDisplay && (
+                          <p className="text-xs text-rose-300 mt-0.5">Spouse: {spouseDisplay}</p>
+                        )}
+                        {restNotes && <p className="text-xs text-[#9490A8]/70 mt-0.5 italic">{restNotes}</p>}
                       </div>
                       <button
                         onClick={() => deleteEvent(ev.id)}
@@ -431,7 +562,7 @@ export function MemberProfilePage() {
         memberId={member.id}
         open={addEventOpen}
         onClose={() => setAddEventOpen(false)}
-        onSuccess={load}
+        onSaved={handleEventSaved}
       />
     </div>
   );

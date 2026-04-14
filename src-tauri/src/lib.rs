@@ -90,6 +90,7 @@ pub fn run() {
             trigger_sync,
             get_sync_stats,
             get_sync_queue_items,
+            retry_failed_sync,
             // Export
             export_members_excel,
             export_tithe_excel,

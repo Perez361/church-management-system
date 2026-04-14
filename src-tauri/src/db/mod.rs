@@ -231,6 +231,18 @@ async fn run_migrations(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Welfare disbursements: add beneficiary_type / beneficiary_name columns (idempotent)
+    let _ = sqlx::query(
+        "ALTER TABLE welfare_disbursements ADD COLUMN beneficiary_type TEXT NOT NULL DEFAULT 'member'",
+    )
+    .execute(pool)
+    .await;
+    let _ = sqlx::query(
+        "ALTER TABLE welfare_disbursements ADD COLUMN beneficiary_name TEXT",
+    )
+    .execute(pool)
+    .await;
+
     // Notifications persistence
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS notifications (

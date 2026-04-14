@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { HeartHandshake, Plus, TrendingUp, ArrowDownLeft, Check, X } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { HeartHandshake, Plus, TrendingUp, ArrowDownLeft, Check, X, Tag, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -9,12 +9,15 @@ import { cn, formatCurrency } from "@/lib/utils";
 import {
   tauriGetWelfareContributions, tauriGetWelfareBalance,
   tauriGetWelfareDisbursements, tauriUpdateDisbursementStatus,
-  type WelfareContribution, type WelfareDisbursement,
+  tauriGetMembers,
+  type WelfareContribution, type WelfareDisbursement, type MemberSummary,
 } from "@/lib/tauri";
 
-type PaymentMode    = "cash" | "mobile_money" | "bank_transfer" | "cheque";
-type ActiveTab      = "contributions" | "disbursements";
+type PaymentMode      = "cash" | "mobile_money" | "bank_transfer" | "cheque";
+type ActiveTab        = "contributions" | "disbursements" | "unpaid";
 type DisbStatusFilter = "all" | "pending" | "approved" | "rejected";
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const modeConfig: Record<PaymentMode, { label: string; variant: "green" | "blue" | "gold" | "muted" }> = {
   cash:          { label: "Cash",          variant: "green" },
@@ -24,15 +27,26 @@ const modeConfig: Record<PaymentMode, { label: string; variant: "green" | "blue"
 };
 
 export function WelfarePage() {
+  const now = new Date();
+
   const [contributions,   setContributions]   = useState<WelfareContribution[]>([]);
   const [disbursements,   setDisbursements]   = useState<WelfareDisbursement[]>([]);
   const [balance,         setBalance]         = useState(0);
+  const [members,         setMembers]         = useState<MemberSummary[]>([]);
+  const [memberMap,       setMemberMap]       = useState<Map<string, MemberSummary>>(new Map());
   const [loading,         setLoading]         = useState(true);
   const [activeTab,       setActiveTab]       = useState<ActiveTab>("contributions");
   const [disbFilter,      setDisbFilter]      = useState<DisbStatusFilter>("all");
   const [approvingId,     setApprovingId]     = useState<string | null>(null);
-  const [recordContribOpen, setRecordContribOpen] = useState(false);
-  const [recordDisbOpen,    setRecordDisbOpen]    = useState(false);
+  const [recordContribOpen,    setRecordContribOpen]    = useState(false);
+  const [recordDisbOpen,       setRecordDisbOpen]       = useState(false);
+  const [prefillUnpaidMember,  setPrefillUnpaidMember]  = useState<string | undefined>();
+
+  // Unpaid tab period selector
+  const [unpaidMonth, setUnpaidMonth] = useState(now.getMonth() + 1);
+  const [unpaidYear,  setUnpaidYear]  = useState(now.getFullYear());
+  const [unpaidContribs, setUnpaidContribs] = useState<WelfareContribution[]>([]);
+  const [unpaidLoading,  setUnpaidLoading]  = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -40,19 +54,37 @@ export function WelfarePage() {
       tauriGetWelfareContributions(),
       tauriGetWelfareBalance(),
       tauriGetWelfareDisbursements(),
+      tauriGetMembers(),
     ])
-      .then(([contribs, bal, disbs]) => {
+      .then(([contribs, bal, disbs, mems]) => {
         setContributions(contribs);
         setBalance(bal);
         setDisbursements(disbs);
+        setMembers(mems);
+        setMemberMap(new Map(mems.map((m) => [m.id, m])));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
+  // Reload unpaid-period contributions whenever month/year or tab changes
+  useEffect(() => {
+    if (activeTab !== "unpaid") return;
+    setUnpaidLoading(true);
+    tauriGetWelfareContributions(undefined, unpaidMonth, unpaidYear)
+      .then(setUnpaidContribs)
+      .catch(console.error)
+      .finally(() => setUnpaidLoading(false));
+  }, [activeTab, unpaidMonth, unpaidYear]);
+
+  // Members who have NOT contributed in the selected month/year
+  const unpaidMembers = useMemo(() => {
+    const paidIds = new Set(unpaidContribs.map((c) => c.member_id));
+    return members.filter((m) => m.status === "active" && !paidIds.has(m.id));
+  }, [members, unpaidContribs]);
+
   useEffect(() => { load(); }, [load]);
 
-  const now = new Date();
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const receivedMonth = contributions
     .filter((c) => c.contribution_date.startsWith(monthPrefix))
@@ -88,23 +120,30 @@ export function WelfarePage() {
 
         {/* Tabs */}
         <div className="flex items-center gap-1 bg-[#1C1828] border border-[#2E2840] rounded-xl p-1 w-fit">
-          {(["contributions", "disbursements"] as const).map((tab) => (
+          {([
+            { key: "contributions", label: "Contributions", count: contributions.length },
+            { key: "disbursements", label: "Disbursements", count: disbursements.length },
+            { key: "unpaid",        label: "Unpaid",        count: unpaidMembers.length, warn: unpaidMembers.length > 0 },
+          ] as { key: ActiveTab; label: string; count: number; warn?: boolean }[]).map(({ key, label, count, warn }) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              key={key}
+              onClick={() => setActiveTab(key)}
               className={cn(
-                "px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 capitalize",
-                activeTab === tab
+                "flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-150",
+                activeTab === key
                   ? "bg-amber-400/15 text-amber-400"
                   : "text-[#9490A8] hover:text-white",
               )}
             >
-              {tab}
+              {warn && activeTab !== key && <AlertTriangle size={10} className="text-rose-400 shrink-0" />}
+              {label}
               <span className={cn(
-                "ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full",
-                activeTab === tab ? "bg-amber-400/20 text-amber-400" : "bg-white/5 text-[#9490A8]",
+                "text-[10px] px-1.5 py-0.5 rounded-full",
+                activeTab === key
+                  ? "bg-amber-400/20 text-amber-400"
+                  : warn ? "bg-rose-400/15 text-rose-400" : "bg-white/5 text-[#9490A8]",
               )}>
-                {tab === "contributions" ? contributions.length : disbursements.length}
+                {count}
               </span>
             </button>
           ))}
@@ -128,7 +167,7 @@ export function WelfarePage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#2E2840]/60">
-                      {["Member ID","Amount","Date","Mode","Reference","Received By"].map((h) => (
+                      {["Member","Amount","Date","Mode","Reference","Received By"].map((h) => (
                         <th key={h} className="px-5 py-3 text-left text-[10px] font-bold text-[#9490A8] uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
@@ -141,8 +180,11 @@ export function WelfarePage() {
                         </td>
                       </tr>
                     ) : contributions.map((c) => {
-                      const mode = modeConfig[c.payment_mode as PaymentMode] ?? { label: c.payment_mode, variant: "muted" as const };
-                      const date = new Date(c.contribution_date).toLocaleDateString("en-GH", { day: "numeric", month: "short", year: "numeric" });
+                      const mode   = modeConfig[c.payment_mode as PaymentMode] ?? { label: c.payment_mode, variant: "muted" as const };
+                      const date   = new Date(c.contribution_date).toLocaleDateString("en-GH", { day: "numeric", month: "short", year: "numeric" });
+                      const mem    = memberMap.get(c.member_id);
+                      const name   = mem ? `${mem.first_name} ${mem.last_name}` : c.member_id.slice(0, 8) + "…";
+                      const memNo  = mem?.member_no ?? "";
                       return (
                         <tr key={c.id} className="border-b border-[#2E2840]/40 last:border-0 hover:bg-white/[0.018] transition-colors">
                           <td className="px-5 py-3.5">
@@ -150,7 +192,10 @@ export function WelfarePage() {
                               <div className="w-7 h-7 rounded-lg bg-rose-400/10 border border-rose-400/20 flex items-center justify-center shrink-0">
                                 <HeartHandshake size={12} className="text-rose-400" />
                               </div>
-                              <span className="font-mono text-xs text-[#9490A8]">{c.member_id.slice(0, 8)}…</span>
+                              <div>
+                                <p className="text-sm text-white">{name}</p>
+                                {memNo && <p className="text-[10px] font-mono text-[#9490A8]">{memNo}</p>}
+                              </div>
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
@@ -246,14 +291,36 @@ export function WelfarePage() {
                           catch (e) { console.error(e); }
                           finally { setApprovingId(null); }
                         }
+                        const isCause   = d.beneficiary_type === "cause";
+                        const benefName = isCause
+                          ? (d.beneficiary_name ?? "Cause")
+                          : (() => {
+                              const m = memberMap.get(d.beneficiary_id);
+                              return m ? `${m.first_name} ${m.last_name}` : d.beneficiary_id.slice(0, 8) + "…";
+                            })();
+                        const benefSub = isCause ? null : memberMap.get(d.beneficiary_id)?.member_no ?? null;
                         return (
                           <tr key={d.id} className="border-b border-[#2E2840]/40 last:border-0 hover:bg-white/[0.018] transition-colors">
                             <td className="px-5 py-3.5">
                               <div className="flex items-center gap-3">
-                                <div className="w-7 h-7 rounded-lg bg-blue-400/10 border border-blue-400/20 flex items-center justify-center shrink-0">
-                                  <ArrowDownLeft size={12} className="text-blue-400" />
+                                <div className={cn(
+                                  "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
+                                  isCause
+                                    ? "bg-purple-400/10 border border-purple-400/20"
+                                    : "bg-blue-400/10 border border-blue-400/20",
+                                )}>
+                                  {isCause
+                                    ? <Tag size={12} className="text-purple-400" />
+                                    : <ArrowDownLeft size={12} className="text-blue-400" />
+                                  }
                                 </div>
-                                <span className="font-mono text-xs text-[#9490A8]">{d.beneficiary_id.slice(0, 8)}…</span>
+                                <div>
+                                  <p className="text-sm text-white">{benefName}</p>
+                                  {isCause
+                                    ? <p className="text-[10px] text-purple-400/70">Cause</p>
+                                    : benefSub && <p className="text-[10px] font-mono text-[#9490A8]">{benefSub}</p>
+                                  }
+                                </div>
                               </div>
                             </td>
                             <td className="px-5 py-3.5">
@@ -313,12 +380,126 @@ export function WelfarePage() {
             )}
           </Card>
         )}
+
+        {/* ── Unpaid Tab ── */}
+        {activeTab === "unpaid" && (
+          <Card>
+            {/* Header: period selector */}
+            <div className="px-5 py-3.5 border-b border-[#2E2840] flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                {/* Month navigator */}
+                <div className="flex items-center gap-1 bg-[#15121F] border border-[#2E2840] rounded-xl p-1">
+                  <button
+                    onClick={() => {
+                      if (unpaidMonth === 1) { setUnpaidMonth(12); setUnpaidYear((y) => y - 1); }
+                      else setUnpaidMonth((m) => m - 1);
+                    }}
+                    className="p-1 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+                  <span className="px-2 text-xs font-bold text-white min-w-[80px] text-center">
+                    {MONTH_NAMES[unpaidMonth - 1]} {unpaidYear}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (unpaidMonth === 12) { setUnpaidMonth(1); setUnpaidYear((y) => y + 1); }
+                      else setUnpaidMonth((m) => m + 1);
+                    }}
+                    className="p-1 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+                {unpaidLoading && <span className="text-xs text-[#9490A8]">Loading…</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                {unpaidMembers.length > 0 && (
+                  <span className="text-xs text-rose-400 font-medium">
+                    {unpaidMembers.length} member{unpaidMembers.length !== 1 ? "s" : ""} yet to contribute
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#2E2840]/60">
+                    {["Member", "Member No.", "Department", "Phone", "Action"].map((h) => (
+                      <th key={h} className="px-5 py-3 text-left text-[10px] font-bold text-[#9490A8] uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unpaidLoading ? (
+                    <tr><td colSpan={5} className="px-5 py-12 text-center text-[#9490A8] text-sm">Loading…</td></tr>
+                  ) : unpaidMembers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-12 text-center">
+                        <HeartHandshake size={28} className="text-emerald-400/30 mx-auto mb-2" />
+                        <p className="text-sm text-[#9490A8]">
+                          All active members have contributed for {MONTH_NAMES[unpaidMonth - 1]} {unpaidYear}.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : unpaidMembers.map((m) => (
+                    <tr key={m.id} className="border-b border-[#2E2840]/40 last:border-0 hover:bg-white/[0.018] transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-rose-400/10 border border-rose-400/20 flex items-center justify-center shrink-0 text-[10px] font-bold text-rose-400">
+                            {m.first_name[0]}{m.last_name[0]}
+                          </div>
+                          <span className="text-sm text-white">{m.first_name} {m.last_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs text-[#9490A8]">{m.member_no}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-sm text-[#9490A8]">{m.department_id ?? "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-sm text-[#9490A8]">{m.phone ?? "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          onClick={() => { setPrefillUnpaidMember(m.id); setRecordContribOpen(true); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-400/10 border border-rose-400/20 text-rose-400 text-xs font-semibold hover:bg-rose-400/20 transition-all"
+                        >
+                          <Plus size={11} /> Record
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {unpaidMembers.length > 0 && (
+              <div className="px-5 py-3.5 border-t border-[#2E2840]">
+                <p className="text-xs text-[#9490A8]">
+                  {members.filter(m => m.status === "active").length - unpaidMembers.length} of {members.filter(m => m.status === "active").length} active members contributed in {MONTH_NAMES[unpaidMonth - 1]} {unpaidYear}
+                </p>
+              </div>
+            )}
+          </Card>
+        )}
       </div>
 
       <RecordWelfareModal
         open={recordContribOpen}
-        onClose={() => setRecordContribOpen(false)}
-        onSuccess={load}
+        onClose={() => { setRecordContribOpen(false); setPrefillUnpaidMember(undefined); }}
+        onSuccess={() => {
+          load();
+          // Refresh unpaid list if on that tab
+          if (activeTab === "unpaid") {
+            tauriGetWelfareContributions(undefined, unpaidMonth, unpaidYear)
+              .then(setUnpaidContribs)
+              .catch(console.error);
+          }
+        }}
+        prefillMemberId={prefillUnpaidMember}
       />
 
       <RecordDisbursementModal

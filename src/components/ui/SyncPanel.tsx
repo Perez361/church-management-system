@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw, CheckCircle, AlertCircle,
-  Clock, Wifi, WifiOff, ChevronDown, ChevronUp,
+  Clock, Wifi, WifiOff, ChevronDown, ChevronUp, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tauriTriggerSync, tauriGetSyncStats, tauriGetSyncQueueItems, type SyncStats, type SyncQueueItem } from "@/lib/tauri";
+import { tauriTriggerSync, tauriGetSyncStats, tauriGetSyncQueueItems, tauriRetryFailedSync, type SyncStats, type SyncQueueItem } from "@/lib/tauri";
 import { useAppStore } from "@/stores/appStore";
 
 
@@ -13,6 +13,7 @@ export function SyncPanel() {
   const [queueItems,   setQueueItems]   = useState<SyncQueueItem[]>([]);
   const [showQueue,    setShowQueue]    = useState(false);
   const [syncing,      setSyncing]      = useState(false);
+  const [retrying,     setRetrying]     = useState(false);
   const [msg,          setMsg]          = useState("");
   const [msgType,      setMsgType]      = useState<"ok" | "err">("ok");
   const { setSyncStatus, syncStatus, addNotification } = useAppStore();
@@ -129,7 +130,7 @@ export function SyncPanel() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={handleSync}
           disabled={!stats.configured || syncing}
@@ -144,6 +145,33 @@ export function SyncPanel() {
           <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
           {syncing ? "Syncing…" : "Sync Now"}
         </button>
+
+        {stats.failed > 0 && (
+          <button
+            onClick={async () => {
+              if (retrying) return;
+              setRetrying(true);
+              try {
+                const n = await tauriRetryFailedSync();
+                setMsg(`${n} failed item${n !== 1 ? "s" : ""} reset — will retry on next sync.`);
+                setMsgType("ok");
+                addNotification({ title: "Retry queued", message: `${n} failed sync item(s) reset to pending.`, type: "info" });
+                await loadStats();
+                await loadQueue();
+              } catch (e: unknown) {
+                setMsg(e instanceof Error ? e.message : String(e));
+                setMsgType("err");
+              } finally {
+                setRetrying(false);
+              }
+            }}
+            disabled={retrying}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-rose-400/30 bg-rose-400/5 text-rose-400 hover:bg-rose-400/15 transition-all disabled:opacity-60"
+          >
+            <RotateCcw size={14} className={retrying ? "animate-spin" : ""} />
+            Retry Failed
+          </button>
+        )}
 
         <button
           onClick={loadStats}
@@ -174,10 +202,14 @@ export function SyncPanel() {
       {stats.failed > 0 && (
         <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-rose-400/10 border border-rose-400/20 text-rose-400 text-sm">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
-          <span>
-            {stats.failed} item{stats.failed > 1 ? "s" : ""} failed after 5 retries.
-            Check your Supabase connection and table permissions.
-          </span>
+          <div className="space-y-1">
+            <p>
+              {stats.failed} item{stats.failed > 1 ? "s" : ""} failed after 5 retries and will not sync automatically.
+            </p>
+            <p className="text-xs text-rose-300/80">
+              Fix your Supabase connection or table permissions, then click <strong>Retry Failed</strong> to queue them again.
+            </p>
+          </div>
         </div>
       )}
 
