@@ -346,7 +346,7 @@ pub async fn export_tithe_excel(year: i64) -> Result<String, AppError> {
         let hf2 = header_fmt();
         let alloc_headers = [
             "Month", "Total Tithe (GHS)",
-            "20% — Leadership", "60% — Programs", "20% — Reserve",
+            "20% — Portion", "60% — Portion", "20% — Balance",
         ];
         for (c, h) in alloc_headers.iter().enumerate() {
             ws2.write_with_format(0, c as u16, *h, &hf2).ok();

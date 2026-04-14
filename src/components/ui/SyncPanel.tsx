@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw, CheckCircle, AlertCircle,
-  Clock, Wifi, WifiOff, ChevronDown, ChevronUp, RotateCcw,
+  Wifi, WifiOff, ChevronDown, ChevronUp, RotateCcw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { tauriTriggerSync, tauriGetSyncStats, tauriGetSyncQueueItems, tauriRetryFailedSync, type SyncStats, type SyncQueueItem } from "@/lib/tauri";
@@ -173,13 +173,6 @@ export function SyncPanel() {
           </button>
         )}
 
-        <button
-          onClick={loadStats}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-[#9490A8] hover:text-white transition-colors"
-        >
-          <Clock size={14} />
-          Refresh
-        </button>
       </div>
 
       {/* Feedback message */}

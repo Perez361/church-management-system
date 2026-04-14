@@ -61,10 +61,6 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
 
   function openBell() {
     setBellOpen((v) => !v);
-    if (!bellOpen && unread > 0) {
-      // Short delay so badge updates after the panel opens
-      setTimeout(markAllRead, 400);
-    }
   }
 
   return (

@@ -210,7 +210,10 @@ export function BulkTitheModal({ open, onClose, onSuccess }: Props) {
 
     setDoneCount(saved);
     setSubmitting(false);
-    if (saved > 0) onSuccess();
+    if (saved > 0) {
+      onSuccess();
+      handleClose();
+    }
   }
 
   function handleClose() {
