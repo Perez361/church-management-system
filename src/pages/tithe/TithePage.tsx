@@ -83,10 +83,10 @@ export function TithePage() {
   return (
     <div>
       <Header title="Tithe" subtitle="Record and track tithe payments" />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
 
         {/* Navigator + action */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-1 bg-[#1C1828] border border-[#2E2840] rounded-xl p-1">
             <button onClick={prevMonth}
               className="p-1.5 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-all">
@@ -114,7 +114,7 @@ export function TithePage() {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {[
             { label: "Total Collected",   value: formatCurrency(totalAmount), Icon: HandCoins,  color: "text-amber-400",   bg: "bg-amber-400/10",   ring: "border-amber-400/20"   },
             { label: "Payers This Month", value: String(payersCount),          Icon: Users,       color: "text-blue-400",    bg: "bg-blue-400/10",    ring: "border-blue-400/20"   },

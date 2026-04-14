@@ -64,26 +64,26 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
   }
 
   return (
-    <header className="w-full flex items-center justify-between gap-4 px-6 h-16 border-b border-[#2E2840] bg-[#15121F]/90 backdrop-blur-md sticky top-0 z-10">
+    <header className="w-full flex items-center justify-between gap-2 sm:gap-4 px-4 sm:px-6 h-14 sm:h-16 border-b border-[#2E2840] bg-[#15121F]/90 backdrop-blur-md sticky top-0 z-10">
       {/* Left — title */}
-      <div className="shrink-0">
-        <h1 className="text-base font-bold text-white tracking-tight leading-tight">{title}</h1>
+      <div className="shrink-0 min-w-0">
+        <h1 className="text-sm sm:text-base font-bold text-white tracking-tight leading-tight truncate">{title}</h1>
         {subtitle && (
-          <p className="text-xs text-[#9490A8] mt-0.5 leading-none">{subtitle}</p>
+          <p className="text-[11px] sm:text-xs text-[#9490A8] mt-0.5 leading-none hidden sm:block">{subtitle}</p>
         )}
       </div>
 
       {/* Centre — optional page actions */}
       {actions && (
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto no-scrollbar">
           {actions}
         </div>
       )}
 
       {/* Right — search + notifications */}
-      <div className="flex items-center gap-3 bg-[#1C1828] border border-[#2E2840] rounded-xl px-2 py-1.5 hover:border-[#3E3858] transition-colors shrink-0">
-        {/* Quick search */}
-        <label className="flex items-center gap-2 cursor-text">
+      <div className="flex items-center gap-2 sm:gap-3 bg-[#1C1828] border border-[#2E2840] rounded-xl px-2 py-1.5 hover:border-[#3E3858] transition-colors shrink-0">
+        {/* Quick search — hidden on mobile */}
+        <label className="hidden sm:flex items-center gap-2 cursor-text">
           <Search size={13} className="text-[#9490A8] shrink-0" />
           <input
             type="text"
@@ -93,12 +93,12 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
             placeholder="Search members… ↵"
             className="bg-transparent text-sm text-white placeholder-[#9490A8]/70 outline-none w-36"
           />
-          <kbd className="hidden sm:inline-flex items-center text-[9px] text-[#9490A8]/50 border border-[#2E2840] rounded px-1 py-0.5 font-mono">
+          <kbd className="hidden lg:inline-flex items-center text-[9px] text-[#9490A8]/50 border border-[#2E2840] rounded px-1 py-0.5 font-mono">
             ↵
           </kbd>
         </label>
 
-        <div className="w-px h-4 bg-[#2E2840]" />
+        <div className="hidden sm:block w-px h-4 bg-[#2E2840]" />
 
         {/* Notifications bell */}
         <div ref={bellRef} className="relative">

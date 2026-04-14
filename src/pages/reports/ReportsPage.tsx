@@ -291,7 +291,7 @@ export function ReportsPage() {
     <div>
       <Header title="Reports" subtitle="Financial and member analytics" />
 
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
 
         {/* ── Period tabs + year selector ───────────────────────────── */}
         <div className="flex items-center justify-between flex-wrap gap-3">
@@ -324,7 +324,7 @@ export function ReportsPage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {[
             { label: `Total Income (${periodLabel})`, value: loading ? "—" : formatCurrency(totalIncome), Icon: BarChart3,  color: "text-amber-400",   bg: "bg-amber-400/10",   ring: "border-amber-400/20"   },
             { label: `${currentMonthLabel} Total`,    value: loading ? "—" : formatCurrency(thisMonthIncome), Icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-400/10", ring: "border-emerald-400/20" },
@@ -653,7 +653,7 @@ export function ReportsPage() {
             </div>
           </CardHeader>
           <CardContent className="px-5 pt-2 pb-4">
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
               {[
                 { label: "Available Balance",       value: loading ? "—" : formatCurrency(stats?.welfare_balance ?? 0),          color: "text-rose-400"    },
                 { label: "Contributors This Month",  value: loading ? "—" : String(stats?.welfare_contributors_month ?? 0),        color: "text-blue-400"    },

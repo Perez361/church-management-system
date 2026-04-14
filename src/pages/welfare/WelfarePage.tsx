@@ -95,10 +95,10 @@ export function WelfarePage() {
   return (
     <div>
       <Header title="Welfare" subtitle="Contributions and disbursements" />
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {[
             { label: "Available Balance", value: formatCurrency(balance),        Icon: HeartHandshake, color: "text-rose-400",    bg: "bg-rose-400/10",    ring: "border-rose-400/20",   sub: "Contributions minus disbursements" },
             { label: "Received — Month",  value: formatCurrency(receivedMonth),  Icon: TrendingUp,     color: "text-emerald-400", bg: "bg-emerald-400/10", ring: "border-emerald-400/20", sub: `${contributions.filter(c => c.contribution_date.startsWith(monthPrefix)).length} contributions` },
@@ -119,7 +119,7 @@ export function WelfarePage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 bg-[#1C1828] border border-[#2E2840] rounded-xl p-1 w-fit">
+        <div className="flex items-center gap-1 bg-[#1C1828] border border-[#2E2840] rounded-xl p-1 w-fit max-w-full overflow-x-auto">
           {([
             { key: "contributions", label: "Contributions", count: contributions.length },
             { key: "disbursements", label: "Disbursements", count: disbursements.length },

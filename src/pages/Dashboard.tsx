@@ -252,18 +252,18 @@ export function Dashboard() {
         actions={<DashboardActions />}
       />
 
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
 
         {/* ── Live summary bar ─────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-3 rounded-2xl bg-[#1C1828] border border-[#2E2840]">
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-[#1C1828] border border-[#2E2840]">
           <div className="flex items-center gap-2.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
             <span className="text-xs text-[#8B879C]">
               {new Date().toLocaleDateString("en-GH", { month: "long", year: "numeric" })} overview
             </span>
           </div>
           {totalAmt > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-[#9490A8]">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-[#9490A8]">
               <TrendingUp size={11} />
               {formatCurrency(totalAmt)} total income this month
             </div>
@@ -310,10 +310,10 @@ export function Dashboard() {
         </div>
 
         {/* ── Main area ────────────────────────────────────────────── */}
-        <div className="flex gap-4 items-start">
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
 
           {/* Left panel */}
-          <div className="flex-1 min-w-0 space-y-4">
+          <div className="flex-1 min-w-0 w-full space-y-4">
 
             {/* Income chart */}
             <IncomeChart />
@@ -379,7 +379,7 @@ export function Dashboard() {
           </div>
 
           {/* ── Right panel ──────────────────────────────────────────── */}
-          <div className="w-[268px] shrink-0 space-y-3">
+          <div className="w-full lg:w-[268px] lg:shrink-0 space-y-3">
 
             {/* Quick Actions */}
             <Card>

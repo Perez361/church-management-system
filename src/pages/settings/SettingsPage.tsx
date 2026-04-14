@@ -157,17 +157,17 @@ export function SettingsPage() {
     <div>
       <Header title="Settings" subtitle="System configuration" />
 
-      <div className="p-6 flex gap-5 items-start">
+      <div className="p-4 md:p-6 flex flex-col sm:flex-row gap-4 sm:gap-5 items-start">
 
         {/* ── Left nav ──────────────────────────────────────────────── */}
-        <div className="w-48 shrink-0 space-y-0.5">
+        <div className="w-full sm:w-48 sm:shrink-0 flex sm:flex-col gap-1 overflow-x-auto pb-1 sm:pb-0">
           {TABS.map(({ key, label, Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
               className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl",
-                "text-sm font-medium transition-all duration-150 text-left",
+                "shrink-0 sm:w-full flex items-center gap-2 sm:gap-3 px-3 py-2 sm:py-2.5 rounded-xl",
+                "text-sm font-medium transition-all duration-150 text-left whitespace-nowrap",
                 activeTab === key
                   ? "bg-amber-400/10 text-amber-400"
                   : "text-[#9490A8] hover:text-white hover:bg-white/5",

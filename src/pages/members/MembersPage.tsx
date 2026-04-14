@@ -93,9 +93,9 @@ export function MembersPage() {
     <div>
       <Header title="Members" subtitle="Manage church member records" />
 
-      <div className="p-6 space-y-4">
+      <div className="p-4 md:p-6 space-y-4">
         {/* Toolbar */}
-        <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-1 bg-[#1C1828] border border-[#2E2840] rounded-xl p-1">
             {filterTabs.map(({ key, label }) => (
               <button key={key} onClick={() => setStatus(key)}
@@ -119,7 +119,7 @@ export function MembersPage() {
               <Search size={13} className="text-[#9490A8] shrink-0" />
               <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search name or ID…"
-                className="bg-transparent text-sm text-white placeholder-[#9490A8]/60 outline-none w-48" />
+                className="bg-transparent text-sm text-white placeholder-[#9490A8]/60 outline-none w-32 sm:w-48" />
             </label>
             <button onClick={() => setAddOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400 text-black text-xs font-semibold hover:bg-amber-300 transition-colors">

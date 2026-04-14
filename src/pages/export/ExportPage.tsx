@@ -253,7 +253,7 @@ export function ExportPage() {
     <div>
       <Header title="Export Data" subtitle="Download records as Excel or print a PDF annual review" />
 
-      <div className="p-6 space-y-5">
+      <div className="p-4 md:p-6 space-y-5">
 
         {/* ── Year selector ────────────────────────────────────────── */}
         <div className="bg-[#1C1828] border border-[#2E2840] rounded-2xl p-5">
@@ -301,7 +301,7 @@ export function ExportPage() {
             </div>
 
             {/* KPI row */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <SummaryCard label="Total Members"       value={summary.total_members.toString()}              sub={`${summary.active_members} active`}        icon={Users}         color="text-blue-400"    bg="bg-blue-400/10 border-blue-400/20"     />
               <SummaryCard label={`Tithe ${year}`}     value={formatCurrency(summary.total_tithe_year)}     sub="All tithe payments"                         icon={HandCoins}     color="text-amber-400"   bg="bg-amber-400/10 border-amber-400/20"   />
               <SummaryCard label={`Offerings ${year}`} value={formatCurrency(summary.total_offerings_year)} sub="All service offerings"                      icon={Church}        color="text-emerald-400" bg="bg-emerald-400/10 border-emerald-400/20" />
@@ -317,7 +317,7 @@ export function ExportPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-5 py-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
                   {[
                     { label: "20% Portion",  amount: summary.tithe_20_pct,     pct: 20, color: "text-amber-400",   bar: "bg-amber-400",   ring: "bg-amber-400/10 border-amber-400/30"   },
                     { label: "60% Portion",  amount: summary.tithe_60_pct,     pct: 60, color: "text-emerald-400", bar: "bg-emerald-400", ring: "bg-emerald-400/10 border-emerald-400/30" },
@@ -351,7 +351,7 @@ export function ExportPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-5 py-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
                   {[
                     { label: "Contributions",   value: formatCurrency(summary.total_welfare_contrib),   color: "text-emerald-400", ring: "bg-emerald-400/10 border-emerald-400/20" },
                     { label: "Disbursements",   value: formatCurrency(summary.total_welfare_disbursed), color: "text-rose-400",    ring: "bg-rose-400/10 border-rose-400/20"       },
