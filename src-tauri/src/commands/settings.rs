@@ -27,7 +27,7 @@ impl Default for AppSettings {
             auto_sync:         true,
             show_sync_badge:   true,
             weekly_summary:    false,
-            church_name:       "Grace Covenant Church".into(),
+            church_name:       "Assemblies of God".into(),
             supabase_url:      String::new(),
             supabase_anon_key: String::new(),
         }
