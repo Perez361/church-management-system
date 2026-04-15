@@ -11,11 +11,13 @@ interface AppState {
   user: User | null;
   syncStatus: SyncStatus;
   sidebarCollapsed: boolean;
+  mobileMenuOpen: boolean;
   notifications: AppNotification[];
 
   setUser: (user: User | null) => void;
   setSyncStatus: (status: SyncStatus) => void;
   toggleSidebar: () => void;
+  setMobileMenuOpen: (open: boolean) => void;
   loadNotifications: () => Promise<void>;
   addNotification: (n: Omit<AppNotification, "id" | "time" | "read">) => void;
   markAllRead: () => void;
@@ -35,12 +37,14 @@ export const useAppStore = create<AppState>((set) => ({
     last_synced: new Date().toISOString(),
   },
   sidebarCollapsed: false,
+  mobileMenuOpen: false,
   notifications: [],
 
   setUser: (user) => set({ user }),
   setSyncStatus: (syncStatus) => set({ syncStatus }),
   toggleSidebar: () =>
     set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
 
   loadNotifications: async () => {
     try {

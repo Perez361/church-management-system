@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Users, HandCoins, Church,
   HeartHandshake, BarChart3, Settings, FileDown,
-  Cross, ChevronLeft, ChevronRight,
+  Cross, ChevronLeft, ChevronRight, X,
 } from "lucide-react";
 import { useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
@@ -21,23 +21,23 @@ const bottomItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar, user, syncStatus } = useAppStore();
+function SidebarContent({
+  collapsed,
+  onNavClick,
+}: {
+  collapsed: boolean;
+  onNavClick?: () => void;
+}) {
+  const { toggleSidebar, user, syncStatus } = useAppStore();
 
   return (
-    <aside
-      className={cn(
-        "relative hidden md:flex flex-col h-screen bg-[#15121F] border-r border-[#2E2840]",
-        "transition-all duration-300 shrink-0 overflow-visible",
-        sidebarCollapsed ? "w-16" : "w-52"
-      )}
-    >
+    <>
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 shrink-0 border-b border-[#2E2840]">
         <div className="w-8 h-8 rounded-xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center shrink-0 shadow-[0_0_12px_rgba(251,191,36,0.15)]">
           <Cross size={13} className="text-amber-400" />
         </div>
-        {!sidebarCollapsed && (
+        {!collapsed && (
           <div className="overflow-hidden">
             <div className="text-sm font-bold text-white leading-tight truncate tracking-tight">
               Church
@@ -54,6 +54,7 @@ export function Sidebar() {
             key={to}
             to={to}
             end={to === "/"}
+            onClick={onNavClick}
             className={({ isActive }) =>
               cn(
                 "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 group",
@@ -75,7 +76,7 @@ export function Sidebar() {
                     isActive ? "text-amber-400" : "text-[#9490A8] group-hover:text-white"
                   )}
                 />
-                {!sidebarCollapsed && (
+                {!collapsed && (
                   <span className="truncate font-medium">{label}</span>
                 )}
               </>
@@ -85,7 +86,7 @@ export function Sidebar() {
       </nav>
 
       {/* Sync indicator */}
-      {!sidebarCollapsed && (
+      {!collapsed && (
         <div className="px-3 py-2.5 mx-2 mb-2 rounded-xl bg-[#1C1828] border border-[#2E2840]">
           <div className="flex items-center gap-2">
             <div
@@ -121,6 +122,7 @@ export function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onNavClick}
             className={({ isActive }) =>
               cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150",
@@ -129,17 +131,17 @@ export function Sidebar() {
             }
           >
             <Icon size={17} className="shrink-0" />
-            {!sidebarCollapsed && <span>{label}</span>}
+            {!collapsed && <span>{label}</span>}
           </NavLink>
         ))}
 
         {/* User */}
         {user && (
-          <div className={cn("flex items-center gap-3 px-3 py-2.5 mt-1", sidebarCollapsed && "justify-center")}>
+          <div className={cn("flex items-center gap-3 px-3 py-2.5 mt-1", collapsed && "justify-center")}>
             <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-400 text-xs font-bold shrink-0">
               {user.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
             </div>
-            {!sidebarCollapsed && (
+            {!collapsed && (
               <div className="overflow-hidden">
                 <div className="text-xs font-medium text-white truncate">{user.name}</div>
                 <div className="text-[10px] text-[#9490A8] capitalize">{user.role}</div>
@@ -149,12 +151,10 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* ── Floating edge toggle ──────────────────────────────────────────────── */}
-      {/* A pill-shaped tab that peeks out from the right edge of the sidebar.    */}
-      {/* It sits at vertical mid-point, always visible, and glows on hover.      */}
+      {/* Collapse toggle — desktop only */}
       <button
         onClick={toggleSidebar}
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         style={{ top: "50%", right: 0, transform: "translate(50%, -50%)" }}
         className={cn(
           "absolute z-50",
@@ -169,11 +169,56 @@ export function Sidebar() {
           "group",
         )}
       >
-        {sidebarCollapsed
+        {collapsed
           ? <ChevronRight size={10} className="transition-transform group-hover:scale-125" />
           : <ChevronLeft  size={10} className="transition-transform group-hover:scale-125" />
         }
       </button>
-    </aside>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const { sidebarCollapsed, mobileMenuOpen, setMobileMenuOpen } = useAppStore();
+
+  return (
+    <>
+      {/* ── Desktop sidebar ── */}
+      <aside
+        className={cn(
+          "relative hidden md:flex flex-col h-screen bg-[#15121F] border-r border-[#2E2840]",
+          "transition-all duration-300 shrink-0 overflow-visible",
+          sidebarCollapsed ? "w-16" : "w-52"
+        )}
+      >
+        <SidebarContent collapsed={sidebarCollapsed} />
+      </aside>
+
+      {/* ── Mobile drawer ── */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Drawer */}
+          <aside className="relative flex flex-col h-full w-64 bg-[#15121F] border-r border-[#2E2840] shadow-2xl">
+            {/* Close button */}
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="absolute top-4 right-3 p-1.5 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-colors z-10"
+              aria-label="Close menu"
+            >
+              <X size={16} />
+            </button>
+            <SidebarContent
+              collapsed={false}
+              onNavClick={() => setMobileMenuOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

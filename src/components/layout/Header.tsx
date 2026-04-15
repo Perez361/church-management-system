@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Bell, Search, CheckCheck, X, AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react";
+import { Bell, Search, CheckCheck, X, AlertCircle, CheckCircle, Info, AlertTriangle, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAppStore } from "@/stores/appStore";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ function formatNotifTime(iso: string) {
 }
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
-  const { syncStatus, notifications, markAllRead, dismissNotification, loadNotifications, clearAllNotifications } = useAppStore();
+  const { syncStatus, notifications, markAllRead, dismissNotification, loadNotifications, clearAllNotifications, setMobileMenuOpen } = useAppStore();
   const [bellOpen, setBellOpen]   = useState(false);
   const [search,   setSearch]     = useState("");
   const bellRef                   = useRef<HTMLDivElement>(null);
@@ -65,8 +65,17 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
 
   return (
     <header className="w-full flex items-center justify-between gap-2 sm:gap-4 px-4 sm:px-6 h-14 sm:h-16 border-b border-[#2E2840] bg-[#15121F]/90 backdrop-blur-md sticky top-0 z-10">
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={() => setMobileMenuOpen(true)}
+        className="md:hidden p-1.5 rounded-lg text-[#9490A8] hover:text-white hover:bg-white/5 transition-colors shrink-0"
+        aria-label="Open menu"
+      >
+        <Menu size={18} />
+      </button>
+
       {/* Left — title */}
-      <div className="shrink-0 min-w-0">
+      <div className="shrink-0 min-w-0 flex-1 md:flex-none">
         <h1 className="text-sm sm:text-base font-bold text-white tracking-tight leading-tight truncate">{title}</h1>
         {subtitle && (
           <p className="text-[11px] sm:text-xs text-[#9490A8] mt-0.5 leading-none hidden sm:block">{subtitle}</p>
