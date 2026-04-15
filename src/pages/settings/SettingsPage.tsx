@@ -96,7 +96,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 const DEFAULT_SETTINGS: AppSettings = {
   currency: "GHS", date_format: "DD/MM/YYYY", language: "English (Ghana)",
   notifications: true, auto_sync: true, show_sync_badge: true, weekly_summary: false,
-  church_name: "Grace Covenant Church", supabase_url: "", supabase_anon_key: "",
+  church_name: "Assemblies of God, Church", supabase_url: "", supabase_anon_key: "",
 };
 
 export function SettingsPage() {
